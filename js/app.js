@@ -1,5 +1,5 @@
 // SuperVille · Gestão de Perdas — aplicação
-import { firebaseConfig, LOJA, MESES } from './config.js';
+import { firebaseConfig, LOJA, MESES, ADMINS } from './config.js';
 import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js';
 import { parseTrocas, parseVendas } from './parse.js';
 import * as R from './report.js';
@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '13';
+export const APP_V = '14';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -63,12 +63,14 @@ async function loadConfig() {
 }
 
 // ---------------- estrutura ----------------
+const isAdmin = () => ADMINS.includes((state.user?.email || '').toLowerCase());
+const TABS_COLAB = ['painel', 'importar', 'historico'];
 const TABS = [['painel', 'Painel'], ['importar', 'Importar'], ['classificar', 'Classificar'], ['relatorios', 'Relatórios'], ['historico', 'Histórico'], ['anual', 'Anual']];
 function renderShell() {
-  app.innerHTML = `<div class="top"><img src="img/logo.png?v=2"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome}</div></div><div class="sp"></div>
+  app.innerHTML = `<div class="top"><img src="img/logo.png?v=2"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome} · ${esc(state.user?.email || '')}${isAdmin() ? ' (administrador)' : ' (colaborador)'}</div></div><div class="sp"></div>
     <select id="mes">${[...new Set(mesesOpcoes().map(m => m.slice(0, 4)))].map(y => `<optgroup label="${y}${anoFechado(y) ? ' · ano fechado' : ''}">${mesesOpcoes().filter(m => m.startsWith(y)).map(m => `<option value="${m}" ${m === state.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}</optgroup>`).join('')}</select>
     <button class="btn sec" id="sair">Sair</button></div>
-    <nav>${TABS.map(([k, l]) => `<a data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}</a>`).join('')}</nav><main id="main"></main>`;
+    <nav>${TABS.filter(([k]) => isAdmin() || TABS_COLAB.includes(k)).map(([k, l]) => `<a data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}</a>`).join('')}</nav><main id="main"></main>`;
   $('#mes').onchange = async e => { state.mes = e.target.value; await loadMes(); };
   $('#sair').onclick = () => auth.signOut();
   document.querySelectorAll('nav a').forEach(a => a.onclick = () => { state.tab = a.dataset.t; document.querySelectorAll('nav a').forEach(b => b.classList.toggle('on', b === a)); render(); });
@@ -86,6 +88,7 @@ async function loadMes() {
 
 function render() {
   const m = $('#main'); if (!m) return;
+  if (!isAdmin() && !TABS_COLAB.includes(state.tab)) state.tab = 'importar';
   ({ painel, importar, classificar, relatorios, historico, anual })[state.tab](m);
 }
 
@@ -115,10 +118,10 @@ function importar(m) {
       <span class="muted" style="font-weight:400">Para meses passados, escolha o mês: o relatório entra no último dia daquele mês.</span></label>
     <div class="grid2"><div class="drop" data-tipo="VENCIDO"><b>Vencidos</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div>
     <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg"></div></div>
-    <div class="card"><h2>Vendas do mês — Rentabilidade de Vendas</h2><p class="muted">Envie no início do mês o relatório do mês anterior (só a coluna Venda e o lucro bruto são usados).</p>
-    <div class="drop" data-tipo="VENDAS"><b>Vendas</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden></div><div id="vmsg"></div></div>
-    <div class="card"><h2>Histórico / backup (JSON)</h2><p class="muted">Para carregar meses antigos (ex.: setembro/2026 da planilha) ou restaurar um backup.</p>
-    <div class="drop" data-tipo="JSON"><b>Arquivo .json</b><span class="muted">clique ou arraste aqui</span><input type="file" accept=".json,application/json" hidden></div><div id="jmsg"></div></div>`;
+    ${isAdmin() ? `    <div class="card"><h2>Vendas do mês — Rentabilidade de Vendas</h2><p class="muted">Envie no início do mês o relatório do mês anterior (só a coluna Venda e o lucro bruto são usados).</p>
+    <div class="drop" data-tipo="VENDAS"><b>Vendas</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden></div><div id="vmsg"></div></div>` : ''}
+    ${isAdmin() ? `    <div class="card"><h2>Histórico / backup (JSON)</h2><p class="muted">Para carregar meses antigos (ex.: setembro/2026 da planilha) ou restaurar um backup.</p>
+    <div class="drop" data-tipo="JSON"><b>Arquivo .json</b><span class="muted">clique ou arraste aqui</span><input type="file" accept=".json,application/json" hidden></div><div id="jmsg"></div></div>` : ''}`;
   m.querySelectorAll('.drop').forEach(d => {
     const inp = d.querySelector('input');
     d.onclick = () => inp.click();
@@ -238,15 +241,15 @@ function relatorios(m) {
 function historico(m) {
   m.innerHTML = `<div class="card"><h2>Relatórios importados em ${mesLabel(state.mes)}</h2>
     ${state.imports.length ? `<table><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th class="n">Itens</th><th class="n">Total</th><th>Enviado por</th><th></th></tr>
-    ${state.imports.map(i => `<tr><td>${i.data.split('-').reverse().join('/')}</td><td>${i.tipo}</td><td>${esc(i.arquivo || '')}</td><td class="n">${num(i.items.length)}</td><td class="n">${brl(i.total)}</td><td>${esc(i.criadoPor || '')}</td><td><button class="btn red" data-del="${esc(i.id)}">Excluir</button></td></tr>`).join('')}
+    ${state.imports.map(i => `<tr><td>${i.data.split('-').reverse().join('/')}</td><td>${i.tipo}</td><td>${esc(i.arquivo || '')}</td><td class="n">${num(i.items.length)}</td><td class="n">${brl(i.total)}</td><td>${esc(i.criadoPor || '')}</td><td>${isAdmin() ? `<button class="btn red" data-del="${esc(i.id)}">Excluir</button>` : ''}</td></tr>`).join('')}
     <tr class="tot"><td colspan="3">TOTAL DO MÊS</td><td class="n">${num(state.imports.reduce((s, i) => s + i.items.length, 0))}</td><td class="n">${brl(state.imports.reduce((s, i) => s + i.total, 0))}</td><td colspan="2"></td></tr></table>` : '<div class="empty">Nada importado neste mês.</div>'}
-    <p class="muted">Se o mês não bater com os relatórios do sistema, exclua os dias e envie de novo na aba Importar — tudo é recalculado.</p>
-    <div class="flex"><button class="btn out" id="bk">Baixar backup do mês (JSON)</button></div></div>
+    ${isAdmin() ? '<p class="muted">Se o mês não bater com os relatórios do sistema, exclua os dias e envie de novo na aba Importar — tudo é recalculado.</p>' : ''}
+    ${isAdmin() ? '<div class="flex"><button class="btn out" id="bk">Baixar backup do mês (JSON)</button></div>' : '<p class="muted">Se um dia foi enviado errado, envie o PDF certo de novo na aba Importar (ele substitui) ou avise o administrador.</p>'}</div>
     <div class="card"><h2>Vendas do mês</h2>${state.vendas ? `<p>${esc(state.vendas.periodo)} · venda total ${brl(state.vendas.deptos.find(d => d.depto === '0')?.venda || 0)} · arquivo ${esc(state.vendas.arquivo || '')}</p>` : '<p class="muted">Não importadas.</p>'}</div>`;
   m.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!confirm('Excluir este relatório importado? Os números do mês serão recalculados.')) return;
     await db.collection('imports').doc(b.dataset.del).delete(); await loadMes(); state.tab = 'historico'; render(); });
-  $('#bk').onclick = () => {
+  if ($('#bk')) $('#bk').onclick = () => {
     const j = { formato: 'superville-perdas/1', loja: LOJA.id, imports: state.imports.map(({ id, criadoEm, ...i }) => i), vendas: state.vendas ? [(({ criadoEm, ...v }) => v)(state.vendas)] : [] };
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(j)], { type: 'application/json' })); a.download = `backup_perdas_${state.mes}.json`; a.click();
   };

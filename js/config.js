@@ -8,6 +8,8 @@ export const firebaseConfig = {
   appId: "1:322849900384:web:e6d82710a3cc06d3ff4005"
 };
 
+// Administradores: acesso total. Os demais usuários (colaboradores) só enviam os relatórios e consultam.
+export const ADMINS = ['viniciussuperville@gmail.com'];
 export const LOJA = { id: '1', nome: 'Loja 1 — Vila Romana (Coriolano)' };
 
 export const MESES = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
