@@ -1,8 +1,8 @@
 // SuperVille · Gestão de Perdas — aplicação
 import { firebaseConfig, LOJA, MESES } from './config.js';
-import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js?v=3';
+import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js';
 import { parseTrocas, parseVendas } from './parse.js';
-import * as R from './report.js?v=3';
+import * as R from './report.js';
 import { columns } from './charts.js';
 import { exportExcel } from './excel.js';
 
