@@ -16,7 +16,7 @@ export function hbar(items, baseTotal, o = {}) {
   items = items.filter(([, a]) => (a[keys[0]] || 0) + (a[keys[1]] || 0) > 0);
   const W = o.width || 760, LW = o.labelWidth || 200, RH = 36, top = 34, H = top + items.length * RH + 6;
   const mx = Math.max(1, ...items.map(([, a]) => a[keys[0]] + a[keys[1]]));
-  const BW = (W - LW - 10) / 1.45;
+  const BW = (W - LW - 10) / (W < 700 ? 1.8 : 1.45);
   let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" ${FONT} xmlns="http://www.w3.org/2000/svg"><g>${legend([[cols[0], leg[0]], [cols[1], leg[1]]])}</g>`;
   items.forEach(([nome, a], i) => {
     const y = top + i * RH, p = a[keys[0]] || 0, q = a[keys[1]] || 0, t = p + q;
