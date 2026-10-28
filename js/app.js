@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '14';
+export const APP_V = '15';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -64,7 +64,7 @@ async function loadConfig() {
 
 // ---------------- estrutura ----------------
 const isAdmin = () => ADMINS.includes((state.user?.email || '').toLowerCase());
-const TABS_COLAB = ['painel', 'importar', 'historico'];
+const TABS_COLAB = ['painel', 'importar', 'classificar', 'historico'];
 const TABS = [['painel', 'Painel'], ['importar', 'Importar'], ['classificar', 'Classificar'], ['relatorios', 'Relatórios'], ['historico', 'Histórico'], ['anual', 'Anual']];
 function renderShell() {
   app.innerHTML = `<div class="top"><img src="img/logo.png?v=2"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome} · ${esc(state.user?.email || '')}${isAdmin() ? ' (administrador)' : ' (colaborador)'}</div></div><div class="sp"></div>
