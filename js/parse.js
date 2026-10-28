@@ -44,7 +44,9 @@ export async function parseTrocas(file) {
 export async function parseVendas(file) {
   const lines = await pdfLines(file);
   const txt = lines.join('\n');
-  const per = txt.match(/Rentabilidade de Vendas\s+(\d{2})\/(\d{2})\/(\d{4})\s+a\s+(\d{2})\/(\d{2})\/(\d{4})/i);
+  let per = txt.match(/Rentabilidade de Vendas\s+(\d{2})\/(\d{2})\/(\d{4})\s+a\s+(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (!per) { const pm = txt.match(/Rentabilidade de Vendas\s+(\d{2})\/(\d{4})\s+a\s+(\d{2})\/(\d{4})/i);
+    if (pm) per = [pm[0], '01', pm[1], pm[2], String(new Date(+pm[4], +pm[3], 0).getDate()).padStart(2, '0'), pm[3], pm[4]]; }
   if (!per) throw new Error('Este PDF não parece ser o relatório "Rentabilidade de Vendas".');
   const deptos = [];
   for (const l of lines) {

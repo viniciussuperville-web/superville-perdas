@@ -34,16 +34,17 @@ export function classify(it, imp) {
   const isKg = it.kg != null || /\bKG\s*$/.test(it.desc);
   const kg = isKg ? Number(it.kg ?? it.qtd) || 0 : 0;
   const un = isKg ? 0 : Number(it.qtd) || 0;
+  const cod = it.cod || (CAT.cod && CAT.cod[it.plu]) || '';
   let seg = '';
   if (mix === 'Açougue e Peixaria' || mix === 'Frios e Laticínios') {
-    const s = segOf(it.cod || '', it.desc);
+    const s = segOf(cod, it.desc);
     const lst = mix === 'Açougue e Peixaria' ? AC_SEGS : FR_SEGS;
     seg = lst.includes(s) ? s : 'Outros';
   }
   return {
-    data: imp.data, mes: imp.mes, tipo: imp.tipo, origem: it.origem || '', plu: it.plu || '', desc: it.desc, cod: it.cod || '',
+    data: imp.data, mes: imp.mes, tipo: imp.tipo, origem: it.origem || '', plu: it.plu || '', desc: it.desc, cod,
     qtd: Number(it.qtd) || 0, valor: Number(it.valor) || 0, mix, enc: info.enc || '', ger: info.ger || '', seg, kg, un, pes: isKg ? 'kg' : 'un',
-    dep: it.cod ? it.cod.split('/')[0] : (MIX2DEP[mix] || '100'),
+    dep: cod ? cod.split('/')[0] : (MIX2DEP[mix] || '100'),
   };
 }
 
