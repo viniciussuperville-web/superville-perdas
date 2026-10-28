@@ -91,6 +91,10 @@ function painel(m) {
 function importar(m) {
   m.innerHTML = `<div class="card"><h2>Relatórios do dia — Trocas de Fornecedores</h2>
     <p class="muted">Envie o PDF de <b>vencidos</b> e o de <b>avariados</b>. A data usada é a data impressa no relatório. Se o mesmo dia for enviado de novo, ele substitui o anterior.</p>
+    <label class="field" style="max-width:420px;margin-bottom:12px">Mês de referência
+      <select id="refmes"><option value="">Automático — usar a data do relatório (uso diário)</option>
+      ${mesesOpcoes().map(m => `<option value="${m}">${mesLabel(m)} — relatório do mês inteiro (histórico)</option>`).join('')}</select>
+      <span class="muted" style="font-weight:400">Para meses passados, escolha o mês: o relatório entra no último dia daquele mês.</span></label>
     <div class="grid2"><div class="drop" data-tipo="VENCIDO"><b>Vencidos</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div>
     <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg"></div></div>
     <div class="card"><h2>Vendas do mês — Rentabilidade de Vendas</h2><p class="muted">Envie no início do mês o relatório do mês anterior (só a coluna Venda e o lucro bruto são usados).</p>
@@ -131,6 +135,8 @@ async function handle(tipo, files) {
         const r = await parseTrocas(f);
         if (!r.items.length) throw new Error('Nenhum item encontrado no PDF.');
         if (r.loja && r.loja !== LOJA.id) throw new Error(`O relatório é da loja ${r.loja}; este painel é da loja ${LOJA.id}.`);
+        const ref = $('#refmes')?.value;
+        if (ref) { const [ry, rm] = ref.split('-').map(Number); r.data = `${ref}-${String(new Date(ry, rm, 0).getDate()).padStart(2, '0')}`; }
         const mes = r.data.slice(0, 7), id = `${LOJA.id}_${r.data}_${tipo}`;
         const ex = await db.collection('imports').doc(id).get();
         if (ex.exists && !confirm(`Já existe ${tipo.toLowerCase()} de ${r.data.split('-').reverse().join('/')} importado (${ex.data().items.length} itens). Substituir pelo novo arquivo?`)) continue;
