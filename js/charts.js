@@ -13,7 +13,8 @@ function legend(items, y = 14) {
 // Barras horizontais empilhadas: % de cada parte dentro da barra, valor e % do total no fim, quantidade abaixo do nome
 export function hbar(items, baseTotal, o = {}) {
   const keys = o.keys || ['ven', 'ava'], cols = o.colors || [C.black, C.green], leg = o.legend || [LEG_V, LEG_A];
-  items = items.filter(([, a]) => (a[keys[0]] || 0) + (a[keys[1]] || 0) > 0);
+  // sempre do que mais perdeu para o que menos perdeu
+  items = items.filter(([, a]) => (a[keys[0]] || 0) + (a[keys[1]] || 0) > 0).sort((x, y) => ((y[1][keys[0]] || 0) + (y[1][keys[1]] || 0)) - ((x[1][keys[0]] || 0) + (x[1][keys[1]] || 0)));
   const W = o.width || 760, LW = o.labelWidth || 200, RH = 36, top = 34, H = top + items.length * RH + 6;
   const mx = Math.max(1, ...items.map(([, a]) => a[keys[0]] + a[keys[1]]));
   const BW = (W - LW - 10) / (W < 700 ? 1.8 : 1.45);

@@ -12,3 +12,4 @@ body{background:#888}
 .hd .tag{margin-left:auto;text-align:right;font-size:8.5px;color:var(--green);font-weight:700;line-height:1.5} .hd .tag span{color:#cfcfcf;font-weight:400}
 .foot{position:absolute;bottom:6mm;left:12mm;right:12mm;font-size:7.5px;color:#8C8C8C;display:flex;justify-content:space-between;border-top:1px solid #E3E6E4;padding-top:4px}
 @media print{body{background:#fff}.toolbar{display:none}.page{margin:0;page-break-after:always}.page:last-child{page-break-after:auto}}
+.sumario{font-size:10.5px!important;margin-bottom:6mm} .sumario td{padding:6px 8px!important}

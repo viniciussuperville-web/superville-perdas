@@ -3,7 +3,7 @@ import { firebaseConfig, LOJA, MESES } from './config.js';
 import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js';
 import { parseTrocas, parseVendas } from './parse.js';
 import * as R from './report.js';
-import { columns } from './charts.js';
+import { columns, hbar } from './charts.js';
 import { exportExcel } from './excel.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '12';
+export const APP_V = '13';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -30,8 +30,11 @@ const state = { mes: '', tab: 'painel', imports: [], vendas: null, rows: [], use
 const hoje = new Date();
 const mesAtual = () => `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 const mesLabel = m => { const [y, mm] = m.split('-'); return `${MESES[+mm]}/${y}`; };
-function mesesOpcoes() { const out = []; let y = 2026, m = 1; const [ey, em] = mesAtual().split('-').map(Number);
-  while (y < ey || (y === ey && m <= em)) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } return out.reverse(); }
+const ANO0 = 2026;
+function mesesOpcoes() { const out = []; const ey = hoje.getFullYear();
+  for (let y = ey; y >= ANO0; y--) for (let m = 12; m >= 1; m--) { const k = `${y}-${String(m).padStart(2, '0')}`; if (y === ey || k <= mesAtual()) out.push(k); } return out; }
+const anosFechados = {};
+const anoFechado = ano => anosFechados[ano]?.fechado;
 
 // ---------------- autenticação ----------------
 auth.onAuthStateChanged(async u => {
@@ -39,7 +42,7 @@ auth.onAuthStateChanged(async u => {
   if (!u) return renderLogin();
   await loadCatalog();
   await loadConfig();
-  state.mes = state.mes || mesesOpcoes()[0];
+  state.mes = state.mes || mesAtual();
   renderShell(); await loadMes();
 });
 
@@ -56,13 +59,14 @@ function renderLogin(err = '') {
 async function loadConfig() {
   const c = await db.collection('config').doc('classificacao').get(); setManual(c.exists ? c.data().map : {});
   const r = await db.collection('config').doc('responsaveis').get(); if (r.exists) setResponsaveis(r.data().map);
+  const a = await db.collection('config').doc('anos').get(); Object.assign(anosFechados, a.exists ? a.data().map || {} : {});
 }
 
 // ---------------- estrutura ----------------
 const TABS = [['painel', 'Painel'], ['importar', 'Importar'], ['classificar', 'Classificar'], ['relatorios', 'Relatórios'], ['historico', 'Histórico'], ['anual', 'Anual']];
 function renderShell() {
   app.innerHTML = `<div class="top"><img src="img/logo.png?v=2"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome}</div></div><div class="sp"></div>
-    <select id="mes">${mesesOpcoes().map(m => `<option value="${m}" ${m === state.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}</select>
+    <select id="mes">${[...new Set(mesesOpcoes().map(m => m.slice(0, 4)))].map(y => `<optgroup label="${y}${anoFechado(y) ? ' · ano fechado' : ''}">${mesesOpcoes().filter(m => m.startsWith(y)).map(m => `<option value="${m}" ${m === state.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}</optgroup>`).join('')}</select>
     <button class="btn sec" id="sair">Sair</button></div>
     <nav>${TABS.map(([k, l]) => `<a data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}</a>`).join('')}</nav><main id="main"></main>`;
   $('#mes').onchange = async e => { state.mes = e.target.value; await loadMes(); };
@@ -138,6 +142,8 @@ async function handle(tipo, files) {
       } else if (tipo === 'JSON') {
         const j = JSON.parse(await f.text());
         if (j.formato !== 'superville-perdas/1') throw new Error('Arquivo JSON em formato desconhecido.');
+        const fj = [...new Set(j.imports.map(i => i.data.slice(0, 4)))].filter(anoFechado);
+        if (fj.length) throw new Error(`O ano ${fj.join(', ')} está fechado. Para corrigir algo nele, reabra o ano na aba Anual.`);
         for (const imp of j.imports) {
           const id = `${imp.loja}_${imp.data}_${imp.tipo}`;
           await db.collection('imports').doc(id).set({ ...imp, criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
@@ -161,6 +167,8 @@ async function handle(tipo, files) {
           (grupos[key] ||= { data: d, tipo: t, items: [] }).items.push({ plu: x.plu, desc: x.desc, cod: x.cod, qtd: x.qtd, valor: x.valor });
         }
         const lst = Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data) || a.tipo.localeCompare(b.tipo));
+        const fech = [...new Set(lst.map(g => g.data.slice(0, 4)))].filter(anoFechado);
+        if (fech.length) throw new Error(`O ano ${fech.join(', ')} está fechado. Para corrigir algo nele, reabra o ano na aba Anual.`);
         const ids = lst.map(g => `${LOJA.id}_${g.data}_${g.tipo}`);
         const exs = (await Promise.all(ids.map(id => db.collection('imports').doc(id).get()))).filter(e => e.exists);
         if (exs.length && !confirm(lst.length > 1
@@ -245,23 +253,115 @@ function historico(m) {
 }
 
 // ---------------- anual ----------------
-async function anual(m) {
-  const ano = state.mes.slice(0, 4);
-  m.innerHTML = '<div class="empty">Carregando o ano…</div>';
+async function dadosAno(ano) {
   const q = await db.collection('imports').where('mes', '>=', `${ano}-01`).where('mes', '<=', `${ano}-12`).get();
+  const docs = q.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.loja === LOJA.id);
   const vq = await db.collection('vendas').where('loja', '==', LOJA.id).get();
-  const vend = {}; vq.docs.forEach(d => vend[d.data().mes] = d.data());
-  const meses = {}; q.docs.map(d => d.data()).filter(i => i.loja === LOJA.id).forEach(i => { const x = meses[i.mes] ||= { ven: 0, ava: 0 }; x[i.tipo === 'VENCIDO' ? 'ven' : 'ava'] += i.total; });
-  const ks = Object.keys(meses).sort();
-  if (!ks.length) { m.innerHTML = `<div class="card empty">Sem dados em ${ano}.</div>`; return; }
-  const tv = ks.reduce((s, k) => s + meses[k].ven, 0), ta = ks.reduce((s, k) => s + meses[k].ava, 0);
-  m.innerHTML = `<div class="card"><h2>Perdas de ${ano}, mês a mês</h2>
-    <div class="kpis">${[['Perda no ano', brl(tv + ta, 0), `${ks.length} mês(es) com dados`, 'red'], ['Vencido', brl(tv, 0), pct(tv / (tv + ta)), 'dark'], ['Avariado', brl(ta, 0), pct(ta / (tv + ta)), ''], ['Média por mês', brl((tv + ta) / ks.length, 0), '', ''], ['Projeção 12 meses', brl((tv + ta) / ks.length * 12, 0), 'se a média se mantiver', 'dark']]
+  const vend = {}; vq.docs.forEach(d => { const v = d.data(); if (v.mes?.startsWith(ano)) vend[v.mes] = v; });
+  const meses = {};
+  docs.forEach(i => { const x = meses[i.mes] ||= { ven: 0, ava: 0 }; x[i.tipo === 'VENCIDO' ? 'ven' : 'ava'] += i.total; });
+  for (const k in meses) { const v = vend[k], t = v?.deptos?.find(d => d.depto === '0'); Object.assign(meses[k], { venda: t?.venda || 0, lucro: t?.lucro || 0, deptos: v?.deptos || [] }); }
+  const rows = docs.flatMap(imp => (imp.items || []).map(it => classify(it, imp)));
+  return { ano, docs, vend, meses, rows, fechado: !!anoFechado(ano) };
+}
+
+async function anual(m) {
+  const anoAtual = String(hoje.getFullYear());
+  state.ano = state.ano || state.mes.slice(0, 4);
+  const ano = state.ano;
+  m.innerHTML = '<div class="empty">Carregando o ano…</div>';
+  const A = await dadosAno(ano);
+  const anos = []; for (let y = +anoAtual; y >= ANO0; y--) anos.push(String(y));
+  const info = anosFechados[ano];
+  const sel = `<label class="field" style="max-width:160px">Ano<select id="ano">${anos.map(y => `<option ${y === ano ? 'selected' : ''}>${y}</option>`).join('')}</select></label>`;
+  const ks = Object.keys(A.meses).sort();
+  const podeFechar = !A.fechado && (ano < anoAtual || hoje.getMonth() === 11);
+  const status = A.fechado
+    ? `<div class="msg ok">🔒 <b>Ano ${ano} fechado</b> em ${new Date(info.em).toLocaleDateString('pt-BR')} por ${esc(info.por || '')}. Os dados ficam guardados e podem ser consultados e exportados; novas importações para ${ano} ficam bloqueadas.</div>`
+    : `<div class="msg info">Ano <b>${ano}</b> aberto — recebendo os relatórios do dia a dia.${podeFechar ? '' : ` O fechamento fica disponível a partir de <b>dezembro de ${ano}</b>.`}</div>`;
+  if (!ks.length) { m.innerHTML = `<div class="card"><div class="flex">${sel}</div>${status}<div class="empty">Sem dados em ${ano}. É só começar a importar os relatórios do dia a dia na aba Importar.</div></div>`; bindAno(); return; }
+  const tv = ks.reduce((s, k) => s + A.meses[k].ven, 0), ta = ks.reduce((s, k) => s + A.meses[k].ava, 0), tot = tv + ta;
+  const comV = ks.filter(k => A.meses[k].venda), vv = comV.reduce((s, k) => s + A.meses[k].venda, 0), pv = comV.reduce((s, k) => s + A.meses[k].ven + A.meses[k].ava, 0);
+  m.innerHTML = `<div class="card"><div class="flex" style="align-items:flex-end">${sel}<div class="sp" style="flex:1"></div>
+      <button class="btn" id="ra">Relatório anual (PDF)</button><button class="btn out" id="xa">Excel do ano</button><button class="btn out" id="ja">Arquivo do ano (JSON)</button></div>${status}
+    <h2>Perdas de ${ano}, mês a mês</h2>
+    <div class="kpis">${[['Perda no ano', brl(tot, 0), `${ks.length} mês(es) com dados`, 'red'], ['Média por mês', brl(tot / ks.length, 0), 'perda média de cada mês', 'dark'],
+      ['De cada R$ 100 vendidos', vv ? 'R$ ' + num(pv / vv * 100, 2) : '-', vv ? `${comV.length} mês(es) com venda` : 'aguardando vendas', ''], ['Vencido', brl(tv, 0), pct(tv / tot), 'dark'],
+      [A.fechado || ks.length === 12 ? 'Avariado' : 'Projeção 12 meses', A.fechado || ks.length === 12 ? brl(ta, 0) : brl(tot / ks.length * 12, 0), A.fechado || ks.length === 12 ? pct(ta / tot) : 'se a média se mantiver', '']]
       .map(([l, v, s, c]) => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('')}</div>
-    <h2>Evolução</h2>${columns(ks.map(k => ({ label: MESES[+k.slice(5)].slice(0, 3), ...meses[k] })))}
-    ${R.ler('cada coluna é um mês. Preto = venceu, verde = estragou. O número em cima é o total do mês em milhares de reais.')}
-    <h2>Tabela</h2><table><tr><th>Mês</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total</th><th class="n">Venda</th><th class="n">De cada R$ 100 vendidos</th><th class="n">Variação</th></tr>
-    ${ks.map((k, i) => { const t = meses[k].ven + meses[k].ava, v = vend[k]?.deptos?.find(d => d.depto === '0')?.venda, prev = i ? meses[ks[i - 1]].ven + meses[ks[i - 1]].ava : null;
-      return `<tr><td><b>${mesLabel(k)}</b></td><td class="n">${brl(meses[k].ven)}</td><td class="n">${brl(meses[k].ava)}</td><td class="n"><b>${brl(t)}</b></td><td class="n">${v ? brl(v, 0) : '-'}</td><td class="n">${v ? 'R$ ' + num(t / v * 100, 2) : '-'}</td><td class="n">${prev ? (t > prev ? '▲ ' : '▼ ') + pct(Math.abs(t / prev - 1)) : '-'}</td></tr>`; }).join('')}
-    <tr class="tot"><td>TOTAL</td><td class="n">${brl(tv)}</td><td class="n">${brl(ta)}</td><td class="n">${brl(tv + ta)}</td><td></td><td></td><td></td></tr></table></div>`;
+    <h2>Evolução</h2>${columns(ks.map(k => ({ label: MESES[+k.slice(5)].slice(0, 3), ven: A.meses[k].ven, ava: A.meses[k].ava })))}
+    ${R.ler('cada coluna é um mês, na ordem do calendário (para ver a evolução). Preto = venceu, verde = estragou. O número em cima é o total do mês em milhares de reais.')}
+    <h2>Ranking dos meses — do que mais perdeu para o que menos perdeu</h2>${hbar(ks.map(k => [MESES[+k.slice(5)], { ven: A.meses[k].ven, ava: A.meses[k].ava }]), tot, { labelWidth: 110, qty: false, endfmt: t => `${brl(t, 0)} · ${pct(t / tot)} do ano` })}
+    ${R.secAnoMeses(R.anualCtx(A))}</div>
+    <div class="card"><h2>Fechar o ano</h2>
+      <p class="muted">No fim do ano, o fechamento: <b>1)</b> baixa o arquivo completo do ano (backup em um só arquivo), <b>2)</b> compacta os relatórios diários de cada mês em um só por mês (vencidos e avariados), mantendo o dia de cada item, <b>3)</b> tranca o ano contra importações por engano e <b>4)</b> o site segue no ano novo, de janeiro a dezembro, para alimentar dia a dia. O relatório anual continua disponível aqui a qualquer momento.</p>
+      <div class="flex">${A.fechado ? `<button class="btn out" id="reab">Reabrir o ano ${ano}</button>` : `<button class="btn red" id="fecha" ${podeFechar ? '' : 'disabled'}>Fechar o ano ${ano}</button>`}</div><div id="amsg"></div></div>`;
+  bindAno();
+  const open = html => { const w = window.open('', '_blank'); if (!w) return alert('Libere as janelas pop-up deste site para abrir o relatório.'); w.document.open(); w.document.write(html); w.document.close(); };
+  $('#ra').onclick = () => open(R.reportAnual(A));
+  $('#xa').onclick = () => excelAno(A);
+  $('#ja').onclick = () => baixarAno(A);
+  if ($('#fecha')) $('#fecha').onclick = () => fecharAno(A);
+  if ($('#reab')) $('#reab').onclick = async () => {
+    if (!confirm(`Reabrir ${ano}? As importações para ${ano} voltam a ser aceitas.`)) return;
+    anosFechados[ano] = { ...anosFechados[ano], fechado: false };
+    await db.collection('config').doc('anos').set({ map: anosFechados }); renderShell(); state.tab = 'anual'; renderShellTabs(); render();
+  };
+}
+function bindAno() { const s = $('#ano'); if (s) s.onchange = e => { state.ano = e.target.value; render(); }; }
+
+function baixarAno(A) {
+  const j = { formato: 'superville-perdas/1', loja: LOJA.id, ano: A.ano, geradoEm: new Date().toISOString(),
+    imports: A.docs.map(({ id, criadoEm, ...i }) => i), vendas: Object.values(A.vend).map(({ criadoEm, ...v }) => v) };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(j)], { type: 'application/json' })); a.download = `ARQUIVO_PERDAS_LOJA${LOJA.id}_${A.ano}.json`; a.click();
+}
+
+function excelAno(A) {
+  const c = R.anualCtx(A), ks = c.ks;
+  const meses = ks.map(k => { const x = A.meses[k], t = x.ven + x.ava; return [MESES[+k.slice(5)], x.ven, x.ava, t, x.venda || '', x.venda ? t / x.venda : '']; });
+  const n = ks.length, tv = c.ven, ta = c.ava;
+  const vv = ks.reduce((s, k) => s + (A.meses[k].venda || 0), 0), pv = ks.filter(k => A.meses[k].venda).reduce((s, k) => s + A.meses[k].ven + A.meses[k].ava, 0), nv = ks.filter(k => A.meses[k].venda).length;
+  const RS = '"R$" #,##0.00;-"R$" #,##0.00;"-"';
+  const top = c.bymix.map(([k]) => k), mm = {};
+  c.rows.forEach(x => { (mm[x.mix] ||= {})[x.mes] = (mm[x.mix][x.mes] || 0) + x.valor; });
+  const setores = top.map(k => [k, mixInfo(k).enc || '', mixInfo(k).ger || '', ...ks.map(x => mm[k]?.[x] || 0), ks.reduce((s, x) => s + (mm[k]?.[x] || 0), 0), ks.reduce((s, x) => s + (mm[k]?.[x] || 0), 0) / n]);
+  exportExcel('Loja 1 · Anual', String(A.ano), c.cons, A.rows, [
+    { name: 'MESES', title: `PERDAS DE ${A.ano} MÊS A MÊS`, cols: [['Mês', 18], ['Vencido (R$)', 15], ['Avariado (R$)', 15], ['Total (R$)', 15], ['Venda (R$)', 17], ['Perda ÷ venda', 13]],
+      rows: meses, fmts: [null, RS, RS, RS, RS, '0.00%'], totCols: [1, 2, 3, 4], after: [['MÉDIA POR MÊS', tv / n, ta / n, (tv + ta) / n, nv ? vv / nv : '', vv ? pv / vv : '']] },
+    { name: 'SETORES POR MÊS', title: `SETORES MÊS A MÊS · ${A.ano}`, cols: [['Setor', 26], ['Encarregado', 14], ['Gerente', 14], ...ks.map(k => [MESES[+k.slice(5)].slice(0, 3), 12]), ['Total do ano', 15], ['Média por mês', 14]],
+      rows: setores, fmts: [null, null, null, ...ks.map(() => RS), RS, RS], totCols: [...ks.map((_, i) => i + 3), ks.length + 3, ks.length + 4] },
+  ]);
+}
+
+async function fecharAno(A) {
+  const ano = A.ano, el = '#amsg';
+  if (!confirm(`Fechar o ano ${ano}?\n\n1) Vai baixar o arquivo completo do ano (guarde-o).\n2) Os relatórios diários de cada mês serão compactados em um por mês.\n3) O ano ficará trancado para novas importações (dá para reabrir).`)) return;
+  try {
+    baixarAno(A);
+    msg(el, 'info', 'Arquivo do ano baixado. Compactando os meses…');
+    let antes = 0, depois = 0;
+    const porMes = {}; A.docs.forEach(d => (porMes[d.mes] ||= []).push(d));
+    for (const mes of Object.keys(porMes).sort()) {
+      const [y, mm] = mes.split('-').map(Number), ult = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
+      for (const tipo of ['VENCIDO', 'AVARIADO']) {
+        const ds = porMes[mes].filter(d => d.tipo === tipo); if (!ds.length) continue;
+        antes += ds.length; depois++;
+        const id = `${LOJA.id}_${ult}_${tipo}`;
+        if (ds.length === 1 && ds[0].id === id) continue;
+        const items = ds.flatMap(d => d.items.map(it => ({ ...it, dia: it.dia || d.data })));
+        const total = Math.round(items.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+        await db.collection('imports').doc(id).set({ loja: LOJA.id, data: ult, mes, tipo, arquivo: `Mês compactado no fechamento de ${ano} (${ds.length} relatório(s))`, items, total, n: items.length,
+          criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
+        const chk = await db.collection('imports').doc(id).get();
+        if (!chk.exists || Math.abs(chk.data().total - total) > 0.01) throw new Error(`Falha ao gravar ${mesLabel(mes)} — nada foi apagado.`);
+        for (const d of ds) if (d.id !== id) await db.collection('imports').doc(d.id).delete();
+      }
+    }
+    const tot = A.rows.reduce((s, x) => s + x.valor, 0);
+    anosFechados[ano] = { fechado: true, em: new Date().toISOString(), por: state.user.email, total: Math.round(tot * 100) / 100, meses: Object.keys(A.meses).length };
+    await db.collection('config').doc('anos').set({ map: anosFechados });
+    msg(el, 'ok', `✔ Ano ${ano} fechado: ${antes} relatório(s) compactados em ${depois} (um por mês e tipo). Total do ano: ${brl(tot)}.`);
+    if (ano === state.mes.slice(0, 4) && ano < String(hoje.getFullYear())) state.mes = mesAtual();
+    renderShell(); state.tab = 'anual'; renderShellTabs(); render();
+  } catch (e) { console.error(e); msg(el, 'err', '✖ ' + esc(e.message)); }
 }

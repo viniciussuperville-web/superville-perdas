@@ -7,13 +7,14 @@ const cell = (v, s, z) => ({ v: v ?? '', t: typeof v === 'number' ? 'n' : 's', s
 const BODY = (i, extra = {}) => ({ font: { name: 'Arial', sz: 9 }, fill: i % 2 ? { fgColor: { rgb: 'EEF7F1' } } : undefined, border: { bottom: { style: 'thin', color: { rgb: 'D9D9D9' } } }, ...extra });
 const RS = '"R$" #,##0.00;-"R$" #,##0.00;"-"';
 
-function sheet(title, sub, cols, rows, fmts, totCols) {
+function sheet(title, sub, cols, rows, fmts, totCols, after = []) {
   const data = [[cell('SUPERVILLE · ' + title, TIT), ...cols.slice(1).map(() => cell('', TIT))],
                 [cell(sub, SUB), ...cols.slice(1).map(() => cell('', SUB))], [],
                 cols.map(c => cell(c[0], HDR))];
   rows.forEach((r, i) => data.push(r.map((v, j) => cell(v, BODY(i), fmts[j]))));
   const tot = cols.map((c, j) => totCols.includes(j) ? cell(rows.reduce((s, r) => s + (Number(r[j]) || 0), 0), TOT, fmts[j]) : cell(j === 0 ? 'TOTAL' : '', TOT));
   data.push(tot);
+  after.forEach(r => data.push(r.map((v, j) => cell(v, { ...TOT, fill: { fgColor: { rgb: '262626' } } }, fmts[j]))));
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = cols.map(c => ({ wch: c[1] }));
   ws['!rows'] = [{ hpt: 24 }, { hpt: 16 }, {}, { hpt: 30 }];
@@ -50,9 +51,11 @@ function guiaSheet(nome, label) {
   return ws;
 }
 
-export function exportExcel(nome, label, cons, rows) {
+export { RS };
+export function exportExcel(nome, label, cons, rows, extra = []) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, guiaSheet(nome, label), 'COMO LER');
+  for (const e of extra) XLSX.utils.book_append_sheet(wb, sheet(e.title, `${nome} · ${label} · Loja 1`, e.cols, e.rows, e.fmts, e.totCols, e.after), e.name);
   for (const [unit, t, qn] of [['kg', 'PRODUTOS POR KG', 'Quilos'], ['un', 'PRODUTOS POR UNIDADE', 'Unidades']]) {
     const lst = cons.filter(a => a.unit === unit);
     const fq = unit === 'kg' ? '#,##0.000' : '#,##0';
@@ -63,7 +66,7 @@ export function exportExcel(nome, label, cons, rows) {
   }
   XLSX.utils.book_append_sheet(wb, sheet('TODOS OS REGISTROS', `${nome} · ${label} · Loja 1`,
     [['Data', 11], ['Tipo', 11], ['PLU', 11], ['Produto', 44], ['Setor', 22], ['Encarregado', 15], ['Gerente', 16], ['Tipo de produto', 22], ['Unidade', 9], ['Quantidade', 11], ['Valor (R$)', 13]],
-    [...rows].sort((a, b) => a.data.localeCompare(b.data) || b.valor - a.valor).map(x => [x.data.split('-').reverse().join('/'), x.tipo, x.plu, x.desc, x.mix, x.enc, x.ger, x.seg, x.pes, x.pes === 'kg' ? x.kg : x.un, x.valor]),
+    [...rows].sort((a, b) => b.valor - a.valor).map(x => [x.data.split('-').reverse().join('/'), x.tipo, x.plu, x.desc, x.mix, x.enc, x.ger, x.seg, x.pes, x.pes === 'kg' ? x.kg : x.un, x.valor]),
     [null, null, null, null, null, null, null, null, null, '#,##0.###', RS], [10]), 'REGISTROS');
   XLSX.writeFile(wb, `PERDAS_${nome.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, '_')}_${label.replace('/', '_')}.xlsx`);
 }

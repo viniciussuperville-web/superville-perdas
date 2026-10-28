@@ -42,7 +42,7 @@ export function classify(it, imp) {
     seg = lst.includes(s) ? s : 'Outros';
   }
   return {
-    data: imp.data, mes: imp.mes, tipo: imp.tipo, origem: it.origem || '', plu: it.plu || '', desc: it.desc, cod,
+    data: it.dia || imp.data, mes: imp.mes, tipo: imp.tipo, origem: it.origem || '', plu: it.plu || '', desc: it.desc, cod,
     qtd: Number(it.qtd) || 0, valor: Number(it.valor) || 0, mix, enc: info.enc || '', ger: info.ger || '', seg, kg, un, pes: isKg ? 'kg' : 'un',
     dep: cod ? cod.split('/')[0] : (MIX2DEP[mix] || '100'),
   };
