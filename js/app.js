@@ -12,6 +12,20 @@ const auth = firebase.auth(), db = firebase.firestore();
 const $ = s => document.querySelector(s);
 const app = $('#app');
 
+
+// ---------------- atualização automática do site ----------------
+export const APP_V = '10';
+async function checkVersion() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const { v } = await r.json();
+    if (v && v !== APP_V && !document.querySelector('.drop.on') && !location.search.includes('v=' + v)) location.replace(location.pathname + '?v=' + v);
+  } catch (e) { /* sem conexão: tenta de novo depois */ }
+}
+setInterval(checkVersion, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+checkVersion();
+
 const state = { mes: '', tab: 'painel', imports: [], vendas: null, rows: [], user: null };
 const hoje = new Date();
 const mesAtual = () => `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
