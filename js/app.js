@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '10';
+export const APP_V = '11';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -104,7 +104,7 @@ function painel(m) {
 // ---------------- importar ----------------
 function importar(m) {
   m.innerHTML = `<div class="card"><h2>Relatórios do dia — Trocas de Fornecedores</h2>
-    <p class="muted">Envie o PDF de <b>vencidos</b> e o de <b>avariados</b>. A data usada é a data impressa no relatório. Se o mesmo dia for enviado de novo, ele substitui o anterior.</p>
+    <p class="muted">Envie o PDF de <b>vencidos</b> e o de <b>avariados</b>. No relatório <b>com data (DT.INC)</b>, cada item entra no dia em que foi lançado — pode mandar o acumulado do mês todo dia, ele substitui sem duplicar. O relatório <b>geral</b> (vencidos + avariados juntos) também pode ir em qualquer um dos dois quadros: o site separa pelo motivo.</p>
     <label class="field" style="max-width:420px;margin-bottom:12px">Mês de referência
       <select id="refmes"><option value="">Automático — usar a data do relatório (uso diário)</option>
       ${mesesOpcoes().map(m => `<option value="${m}">${mesLabel(m)} — relatório do mês inteiro (histórico)</option>`).join('')}</select>
@@ -149,17 +149,36 @@ async function handle(tipo, files) {
         const r = await parseTrocas(f);
         if (!r.items.length) throw new Error('Nenhum item encontrado no PDF.');
         if (r.loja && r.loja !== LOJA.id) throw new Error(`O relatório é da loja ${r.loja}; este painel é da loja ${LOJA.id}.`);
-        const ref = $('#refmes')?.value;
-        if (ref) { const [ry, rm] = ref.split('-').map(Number); r.data = `${ref}-${String(new Date(ry, rm, 0).getDate()).padStart(2, '0')}`; }
-        const mes = r.data.slice(0, 7), id = `${LOJA.id}_${r.data}_${tipo}`;
-        const ex = await db.collection('imports').doc(id).get();
-        if (ex.exists && !confirm(`Já existe ${tipo.toLowerCase()} de ${r.data.split('-').reverse().join('/')} importado (${ex.data().items.length} itens). Substituir pelo novo arquivo?`)) continue;
-        const items = r.items.map(({ plu, desc, cod, qtd, valor }) => ({ plu, desc, cod, qtd, valor }));
-        await db.collection('imports').doc(id).set({ loja: LOJA.id, data: r.data, mes, tipo, arquivo: f.name, items, total: r.total, n: items.length,
-          criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
         const conf = r.totalRelatorio != null && Math.abs(r.totalRelatorio - r.total) > 0.5 ? ` <b>Atenção:</b> o total do relatório é ${brl(r.totalRelatorio)}.` : ' Total confere com o relatório.';
-        const semMix = items.filter(it => classify(it, { data: r.data, mes, tipo }).mix === 'A CLASSIFICAR').length;
-        msg('#imsg', 'ok', `✔ <b>${tipo === 'VENCIDO' ? 'Vencidos' : 'Avariados'}</b> de ${r.data.split('-').reverse().join('/')}: ${items.length} itens, ${brl(r.total)}.${conf}${semMix ? ` ${semMix} item(ns) sem setor — veja a aba <b>Classificar</b>.` : ''}`);
+        // monta os lançamentos: relatório "com data" → um por dia (e por motivo); senão → um pela data do relatório
+        const grupos = {};
+        const tipoDe = x => x.mot === 'VEN' ? 'VENCIDO' : x.mot === 'AVA' ? 'AVARIADO' : tipo;
+        const ref = $('#refmes')?.value;
+        let dataFixa = r.data;
+        if (ref) { const [ry, rm] = ref.split('-').map(Number); dataFixa = `${ref}-${String(new Date(ry, rm, 0).getDate()).padStart(2, '0')}`; }
+        for (const x of r.items) {
+          const d = r.comData && !ref ? x.dia : dataFixa, t = r.comData ? tipoDe(x) : tipo, key = d + '|' + t;
+          (grupos[key] ||= { data: d, tipo: t, items: [] }).items.push({ plu: x.plu, desc: x.desc, cod: x.cod, qtd: x.qtd, valor: x.valor });
+        }
+        const lst = Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data) || a.tipo.localeCompare(b.tipo));
+        const ids = lst.map(g => `${LOJA.id}_${g.data}_${g.tipo}`);
+        const exs = (await Promise.all(ids.map(id => db.collection('imports').doc(id).get()))).filter(e => e.exists);
+        if (exs.length && !confirm(lst.length > 1
+          ? `${exs.length} dia(s) deste relatório já estavam importados. Substituir pelos dados deste arquivo? (não duplica)`
+          : `Já existe ${lst[0].tipo.toLowerCase()} de ${lst[0].data.split('-').reverse().join('/')} importado (${exs[0].data().items.length} itens). Substituir pelo novo arquivo?`)) continue;
+        let semMix = 0;
+        for (let i = 0; i < lst.length; i++) {
+          const g = lst[i], mes = g.data.slice(0, 7), tot = Math.round(g.items.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+          await db.collection('imports').doc(ids[i]).set({ loja: LOJA.id, data: g.data, mes, tipo: g.tipo, arquivo: f.name, items: g.items, total: tot, n: g.items.length,
+            criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
+          semMix += g.items.filter(it => classify(it, { data: g.data, mes, tipo: g.tipo }).mix === 'A CLASSIFICAR').length;
+        }
+        const nome = { VENCIDO: 'Vencidos', AVARIADO: 'Avariados' };
+        const tipos = [...new Set(lst.map(g => g.tipo))].map(t => nome[t]).join(' e ');
+        const dias = [...new Set(lst.map(g => g.data))].sort();
+        const quando = dias.length > 1 ? `${dias.length} dias (${dias[0].split('-').reverse().join('/')} a ${dias.at(-1).split('-').reverse().join('/')}), separados pela data de cada item` : dias[0].split('-').reverse().join('/');
+        msg('#imsg', 'ok', `✔ <b>${tipos}</b> — ${quando}: ${r.items.length} itens, ${brl(r.total)}.${conf}${semMix ? ` ${semMix} item(ns) sem setor — veja a aba <b>Classificar</b>.` : ''}`);
+        const mes = dias.at(-1).slice(0, 7);
         if (mes !== state.mes) { state.mes = mes; renderShell(); }
         await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       }

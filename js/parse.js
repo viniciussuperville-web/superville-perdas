@@ -33,11 +33,13 @@ export async function parseTrocas(file) {
   for (const l of lines) {
     const h = l.match(/Dpt\/Sec\/Grp\/S-Grp:\s*([\d/]+)/);
     if (h) { cod = h[1]; continue; }
-    const m = l.match(/^(\d+-\d)\s+(.+?)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]*\d,\d{2})$/);
-    if (m) items.push({ plu: m[1], desc: m[2].replace(/\s+/g, ' ').trim(), cod, qtd: parseFloat(m[3]), custo: parseFloat(m[4]), valor: br(m[5]) });
+    // formato antigo: termina no valor · formato "com data": + motivo (VEN/AVA) e DT.INC
+    const m = l.match(/^(\d+-\d)\s+(.+?)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]*\d,\d{2})(?:\s+([A-Z]{2,4})\s+(\d{2})\/(\d{2})\/(\d{4}))?$/);
+    if (m) items.push({ plu: m[1], desc: m[2].replace(/\s+/g, ' ').trim(), cod, qtd: parseFloat(m[3]), custo: parseFloat(m[4]), valor: br(m[5]),
+      mot: m[6] || '', dia: m[7] ? `${m[9]}-${m[8]}-${m[7]}` : '' });
   }
   const total = Math.round(items.reduce((s, x) => s + x.valor, 0) * 100) / 100;
-  return { data, loja, items, total, totalRelatorio: tgm ? br(tgm[1]) : null };
+  return { data, loja, items, total, totalRelatorio: tgm ? br(tgm[1]) : null, comData: items.length > 0 && items.every(x => x.dia) };
 }
 
 // "Rentabilidade de Vendas" — usa só a coluna VENDA (e o lucro bruto para a análise de lucro)
