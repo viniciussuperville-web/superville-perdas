@@ -1,8 +1,8 @@
 // SuperVille · Gestão de Perdas — aplicação
 import { firebaseConfig, LOJA, MESES } from './config.js';
-import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js';
+import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js?v=3';
 import { parseTrocas, parseVendas } from './parse.js';
-import * as R from './report.js';
+import * as R from './report.js?v=3';
 import { columns } from './charts.js';
 import { exportExcel } from './excel.js';
 
@@ -30,7 +30,7 @@ auth.onAuthStateChanged(async u => {
 });
 
 function renderLogin(err = '') {
-  app.innerHTML = `<div class="login"><div class="h"><img src="img/logo.png"><div><b>Gestão de Perdas</b><span>Padrão SuperVille</span></div></div><form id="lf">
+  app.innerHTML = `<div class="login"><div class="h"><img src="img/logo.png?v=2"><div><b>Gestão de Perdas</b><span>Padrão SuperVille</span></div></div><form id="lf">
     <div class="muted">Entre com seu e-mail e senha.</div>
     <label class="field">E-mail<input type="email" id="le" required autocomplete="username"></label>
     <label class="field">Senha<input type="password" id="lp" required autocomplete="current-password"></label>
@@ -47,7 +47,7 @@ async function loadConfig() {
 // ---------------- estrutura ----------------
 const TABS = [['painel', 'Painel'], ['importar', 'Importar'], ['classificar', 'Classificar'], ['relatorios', 'Relatórios'], ['historico', 'Histórico'], ['anual', 'Anual']];
 function renderShell() {
-  app.innerHTML = `<div class="top"><img src="img/logo.png"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome}</div></div><div class="sp"></div>
+  app.innerHTML = `<div class="top"><img src="img/logo.png?v=2"><div><h1>Gestão de Perdas</h1><div class="sub">${LOJA.nome}</div></div><div class="sp"></div>
     <select id="mes">${mesesOpcoes().map(m => `<option value="${m}" ${m === state.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}</select>
     <button class="btn sec" id="sair">Sair</button></div>
     <nav>${TABS.map(([k, l]) => `<a data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}</a>`).join('')}</nav><main id="main"></main>`;

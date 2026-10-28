@@ -1,4 +1,4 @@
-@import url(base.css);
+@import url(base.css?v=2);
 @page{size:A4;margin:0}
 body{background:#888}
 .toolbar{position:sticky;top:0;z-index:5;background:#111;color:#ddd;padding:10px 16px;display:flex;gap:14px;align-items:center;font-size:12px}

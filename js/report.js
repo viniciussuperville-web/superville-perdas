@@ -144,7 +144,7 @@ export function secMetas() {
 }
 
 // --------- documento para impressão / PDF ---------
-const header = (t, sub, tag) => `<div class="hd"><img src="img/logo.png"><div><h1>${esc(t)}</h1><div class="sub">${esc(sub)}</div></div><div class="tag">${tag}</div></div>`;
+const header = (t, sub, tag) => `<div class="hd"><img src="img/logo.png?v=2"><div><h1>${esc(t)}</h1><div class="sub">${esc(sub)}</div></div><div class="tag">${tag}</div></div>`;
 function doc(pages, label, title) {
   const body = pages.map((p, i) => `<div class="page">${p}<div class="foot"><span>SuperVille · Controladoria · ${esc(label)}</span><span>Página ${i + 1}</span></div></div>`).join('');
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><base href="${location.href.replace(/[^/]*$/, '')}"><link rel="stylesheet" href="css/report.css"></head>
