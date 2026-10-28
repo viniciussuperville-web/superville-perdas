@@ -16,7 +16,7 @@ const state = { mes: '', tab: 'painel', imports: [], vendas: null, rows: [], use
 const hoje = new Date();
 const mesAtual = () => `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 const mesLabel = m => { const [y, mm] = m.split('-'); return `${MESES[+mm]}/${y}`; };
-function mesesOpcoes() { const out = []; let y = 2026, m = 9; const [ey, em] = mesAtual().split('-').map(Number);
+function mesesOpcoes() { const out = []; let y = 2025, m = 1; const [ey, em] = mesAtual().split('-').map(Number);
   while (y < ey || (y === ey && m <= em)) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } return out.reverse(); }
 
 // ---------------- autenticação ----------------
