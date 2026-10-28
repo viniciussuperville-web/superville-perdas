@@ -30,8 +30,8 @@ auth.onAuthStateChanged(async u => {
 });
 
 function renderLogin(err = '') {
-  app.innerHTML = `<div class="login"><div class="h"><img src="img/logo.png"></div><form id="lf">
-    <div style="font-weight:800;font-size:17px">Gestão de Perdas</div><div class="muted">Entre com seu e-mail e senha.</div>
+  app.innerHTML = `<div class="login"><div class="h"><img src="img/logo.png"><div><b>Gestão de Perdas</b><span>Padrão SuperVille</span></div></div><form id="lf">
+    <div class="muted">Entre com seu e-mail e senha.</div>
     <label class="field">E-mail<input type="email" id="le" required autocomplete="username"></label>
     <label class="field">Senha<input type="password" id="lp" required autocomplete="current-password"></label>
     <button class="btn" type="submit">Entrar</button>${err ? `<div class="msg err">${esc(err)}</div>` : ''}</form></div>`;

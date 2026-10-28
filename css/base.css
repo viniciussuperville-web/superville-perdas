@@ -2,7 +2,7 @@
 @font-face{font-family:'Montserrat';font-weight:600;src:url(montserrat-latin-600-normal.woff2) format('woff2');}
 @font-face{font-family:'Montserrat';font-weight:700;src:url(montserrat-latin-700-normal.woff2) format('woff2');}
 @font-face{font-family:'Montserrat';font-weight:800;src:url(montserrat-latin-800-normal.woff2) format('woff2');}
-:root{--green:#3BB072;--black:#1F1F1F;--dgreen:#1E7B46;--red:#D64545;--yel:#F2B705;}
+:root{--green:#3BB072;--black:#000000;--dgreen:#1E7B46;--red:#D64545;--yel:#F2B705;}
 *{box-sizing:border-box}
 body{font-family:'Montserrat',Arial,sans-serif;color:#262626;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 h2{font-size:14px;font-weight:800;margin:18px 0 8px;color:#111;display:flex;align-items:center;gap:8px}
