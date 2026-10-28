@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '11';
+export const APP_V = '12';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

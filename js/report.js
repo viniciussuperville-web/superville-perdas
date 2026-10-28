@@ -38,10 +38,46 @@ export function secResumo(c) {
 }
 
 export const secGlossario = () => '<h2>Entenda as palavras deste relatório</h2><div class="glos">' + [
-  ['Perda', 'produto que saiu da loja sem ser vendido. O valor é o que pagamos por ele (custo).'], ['Vencido', 'produto que passou da data de validade.'],
-  ['Avariado', 'produto que estragou, quebrou, amassou ou ficou impróprio para venda.'], ['Setor', 'a área da loja e a equipe responsável (ex.: Açougue, Corredor 1).'],
-  ['kg e un', 'kg = produtos vendidos por quilo; un = produtos vendidos por unidade.'], ['Meta', 'o máximo de perda aceitável para cada setor, em % da venda.'],
+  ['Perda', 'produto que saiu da loja sem ser vendido. O valor é o que pagamos por ele (preço de custo), não o preço da gôndola.'],
+  ['Vencido', 'produto que passou da data de validade antes de ser vendido.'],
+  ['Avariado', 'produto que estragou, quebrou, amassou, furou, deu caruncho ou ficou impróprio para venda.'],
+  ['Setor', 'a área da loja e a equipe responsável por ela (ex.: Açougue, Corredor 1, Frios).'],
+  ['Encarregado', 'quem cuida do setor no dia a dia: pedido, validade, exposição e recolhimento.'],
+  ['Gerente', 'quem acompanha os encarregados e responde pelos resultados do setor.'],
+  ['Tipo de produto', 'uma divisão dentro do setor (ex.: no Açougue: bovinos, frango, suínos).'],
+  ['kg e un', '<span class="u kg">kg</span> = produto vendido por quilo, pesado na balança; <span class="u un">un</span> = produto vendido por unidade, contado um a um.'],
+  ['Registros', 'cada vez que um produto foi lançado como perda no sistema.'],
+  ['Vezes', 'quantas vezes o mesmo produto foi recolhido no período. Muitas vezes = problema que se repete.'],
+  ['% (porcentagem)', 'quanto uma parte é do todo. 25% = um quarto; de cada R$ 100, R$ 25.'],
+  ['De cada R$ 100 vendidos', 'quantos reais viraram perda para cada R$ 100 que a loja vendeu. Quanto menor, melhor.'],
+  ['Meta', 'o máximo de perda aceitável para cada setor, comparando com a venda daquele setor.'],
+  ['Lucro bruto', 'o que sobra da venda depois de pagar o produto ao fornecedor.'],
 ].map(([a, b]) => `<div><b>${a}:</b> ${b}</div>`).join('') + '</div>';
+
+export const secLegenda = () => `<h2>Cores e símbolos usados</h2><div class="glos">
+  <div><span class="sem" style="background:${C.black}"></span><b>Preto</b> = vencido (passou da validade)</div>
+  <div><span class="sem" style="background:${C.green}"></span><b>Verde</b> = avariado (estragou ou quebrou)</div>
+  <div><span class="u kg">kg</span> produto vendido por quilo</div><div><span class="u un">un</span> produto vendido por unidade</div>
+  <div><span class="sem" style="background:#3BB072"></span><b>Sinal verde</b> = dentro da meta, está bom</div>
+  <div><span class="sem" style="background:#F2B705"></span><b>Sinal amarelo</b> = um pouco acima da meta, atenção</div>
+  <div><span class="sem" style="background:#D64545"></span><b>Sinal vermelho</b> = acima da meta, precisa agir</div>
+  <div><span class="sem" style="background:#BFBFBF"></span><b>Sinal cinza</b> = setor sem registro de perda neste controle</div></div>
+  <div class="small">Nos gráficos de barra: a barra é dividida em preto (vencido) e verde (avariado); o número <b>dentro</b> da barra é a porcentagem de cada parte; o número <b>no fim</b> da barra é o valor em reais e quanto ele é do total; o texto <b>embaixo do nome</b> é a quantidade perdida.</div>`;
+
+const guia = itens => '<h2>Como este relatório está organizado</h2><div class="hl"><ol style="margin:0;padding-left:18px">' + itens.map(([a, b]) => `<li><b>${a}</b> — ${b}</li>`).join('') + '</ol></div>';
+
+export function secAcoes(c, rr) {
+  const cs = rr ? consolidate(rr) : c.cons, tot = sum(rr || c.rows), ven = sum((rr || c.rows).filter(x => x.tipo === 'VENCIDO'));
+  const top = cs.slice(0, 3), rep3 = cs.filter(a => a.n >= 3).sort((a, b) => b.tot - a.tot).slice(0, 3), both = cs.filter(a => a.ven > 0 && a.ava > 0).slice(0, 3);
+  const li = [];
+  if (top.length) li.push(`<b>Comece pelos maiores:</b> ${top.map(a => `${esc(a.desc)} (${brl(a.tot, 0)})`).join(', ')}. Só esses ${top.length} somam <b>${pct(top.reduce((s, a) => s + a.tot, 0) / tot, 0)}</b> da perda.`);
+  if (tot && ven / tot >= 0.6) li.push(`<b>A maior parte venceu (${pct(ven / tot, 0)}).</b> Revise a quantidade dos pedidos, faça o rodízio (o mais velho na frente) e confira as validades toda semana para baixar o preço antes de vencer.`);
+  else if (tot && ven / tot <= 0.4) li.push(`<b>A maior parte estragou (${pct(1 - ven / tot, 0)}).</b> Revise o manuseio, a temperatura das câmaras e balcões, o armazenamento no estoque e a conferência no recebimento.`);
+  else li.push('<b>Vencido e avariado estão equilibrados.</b> Cuide das duas frentes: pedido e validade (vencido) e manuseio e armazenamento (avariado).');
+  if (rep3.length) li.push(`<b>Produtos que se repetem:</b> ${rep3.map(a => `${esc(a.desc)} (${a.n} vezes)`).join(', ')}. Se volta sempre, o pedido ou a exposição precisa mudar.`);
+  if (both.length) li.push(`<b>Venceram e também estragaram:</b> ${both.map(a => esc(a.desc)).join(', ')}. Pode ser pedido demais e cuidado de menos ao mesmo tempo.`);
+  return '<h2>O que fazer agora</h2><div class="hl"><ul>' + li.map(x => `<li>${x}</li>`).join('') + '</ul></div>';
+}
 
 export const secRanking = c => '<h2>Ranking dos setores — os 12 que mais perderam</h2>' + hbar(c.bymix.slice(0, 12), c.tot) +
   ler('cada barra é um setor, do que mais perdeu para o que menos perdeu. <b>Preto</b> = venceu, <b>verde</b> = estragou; a porcentagem dentro da barra mostra quanto é cada parte. No fim da barra: o valor perdido e quanto ele é de toda a perda da loja. Embaixo do nome: a quantidade perdida.');
@@ -51,7 +87,7 @@ export function secTabela(c) {
   for (const [k, a] of c.bymix) { const i = mixInfo(k);
     h += `<tr><td><b>${esc(k)}</b></td><td>${esc(i.enc)} · ${esc(i.ger)}</td><td class="n">${vp(a.ven, a.tot)}</td><td class="n">${vp(a.ava, a.tot)}</td><td class="n"><b>${brl(a.tot)}</b></td><td class="n"><b>${pct(a.tot / c.tot)}</b></td><td class="n">${qfmt(a.un, a.kg)}</td></tr>`; }
   return h + `<tr class="tot"><td>TOTAL DA LOJA</td><td></td><td class="n">${brl(c.ven)}</td><td class="n">${brl(c.ava)}</td><td class="n">${brl(c.tot)}</td><td class="n">100%</td><td class="n">${qfmt(c.un, c.kg)}</td></tr></table>
-    <div class="small">A porcentagem embaixo de cada valor mostra quanto daquele setor foi vencido e quanto foi avariado.</div>`;
+    ${ler('cada linha é um setor, do que mais perdeu para o que menos perdeu. Em <b>Vencido</b> e <b>Avariado</b>, o número pequeno embaixo do valor é quanto daquele setor foi de cada tipo. <b>% da loja</b> = quanto o setor representa de toda a perda. <b>Quantidade</b> = unidades e quilos perdidos.')}`;
 }
 
 export const secDemais = c => '<h2>Os demais setores lado a lado (sem Açougue, Frios e Pães)</h2>' +
@@ -70,7 +106,8 @@ export function secSeg(c, mix, withKpis = true) {
     ler('cada barra é um tipo de produto. A parte <b>preta</b> é o que venceu e a <b>verde</b> é o que estragou; o número dentro da barra é quanto cada parte representa daquele tipo. No fim da barra: o valor perdido e quanto ele é do setor. Embaixo do nome: a quantidade perdida (un = unidades, kg = quilos).');
   h += '<h2>Tabela do setor</h2><table><tr><th>Tipo de produto</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total</th><th class="n">% do setor</th><th class="n">Unidades</th><th class="n">Quilos</th><th class="n">R$ por kg</th></tr>';
   for (const [s, a] of items) h += `<tr><td><b>${esc(s)}</b></td><td class="n">${vp(a.ven, a.tot)}</td><td class="n">${vp(a.ava, a.tot)}</td><td class="n"><b>${brl(a.tot)}</b></td><td class="n">${pct(a.tot / tot)}</td><td class="n">${a.un ? num(a.un) : '-'}</td><td class="n">${a.kg ? num(a.kg, 1) : '-'}</td><td class="n">${a.kg ? brl(a.vkg / a.kg) : '-'}</td></tr>`;
-  return h + `<tr class="tot"><td>TOTAL</td><td class="n">${brl(ven)}</td><td class="n">${brl(ava)}</td><td class="n">${brl(tot)}</td><td class="n">100%</td><td class="n">${num(un)}</td><td class="n">${num(kg, 1)}</td><td class="n">${brl(kg ? vkg / kg : 0)}</td></tr></table>`;
+  return h + `<tr class="tot"><td>TOTAL</td><td class="n">${brl(ven)}</td><td class="n">${brl(ava)}</td><td class="n">${brl(tot)}</td><td class="n">100%</td><td class="n">${num(un)}</td><td class="n">${num(kg, 1)}</td><td class="n">${brl(kg ? vkg / kg : 0)}</td></tr></table>` +
+    ler('<b>% do setor</b> = quanto cada tipo de produto é da perda do setor. <b>Unidades</b> e <b>Quilos</b> = quantidade perdida. <b>R$ por kg</b> = quanto custou, em média, cada quilo perdido (carne nobre tem R$ por kg mais alto).');
 }
 
 export function tblItems(items, o = {}) {
@@ -93,10 +130,13 @@ export function secTop(c) {
   return `<div class="big">Poucos produtos causam quase toda a perda: <b>${p.k80}</b> produtos, de ${num(c.cons.length)}, somam <b>80%</b> de tudo o que perdemos. É neles que vale agir primeiro.</div>` +
     p.svg + ler('a linha verde soma a perda dos produtos, começando pelo que mais perdeu. Onde ela cruza a linha tracejada de 80% está a quantidade de produtos que concentra a maior parte da perda.') +
     '<h2>Top 20 produtos do mês</h2>' + tblItems(c.cons.slice(0, 20), { total: c.tot }) +
-    `<div class="small">${u('kg')} vendido por quilo · ${u('un')} vendido por unidade · "Vezes" = quantas vezes o produto foi recolhido no mês.</div>`;
+    ler(`a tabela mostra os 20 produtos que mais deram prejuízo, somando vencido e avariado. <b>Quanto perdeu</b> = quantidade (${u('kg')} quilos ou ${u('un')} unidades). <b>% do total</b> = quanto o produto é de toda a perda. <b>Vezes</b> = quantas vezes ele foi recolhido no mês.`);
 }
 
-export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u></h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}`;
+export const lerUnit = unit => ler(unit === 'kg'
+  ? 'aqui estão só os produtos <b>vendidos por quilo</b> (pesados na balança, como carnes, frios fatiados e queijos). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em quilos; <b>Valor</b> é o custo em reais.'
+  : 'aqui estão só os produtos <b>vendidos por unidade</b> (contados um a um, como iogurtes, bebidas e pacotes). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em unidades; <b>Valor</b> é o custo em reais.');
+export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u></h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}${lerUnit(unit)}`;
 
 export function secRepetidos(c) {
   const both = c.cons.filter(a => a.ven > 0 && a.ava > 0).slice(0, 15);
@@ -155,7 +195,16 @@ const today = () => new Date().toLocaleDateString('pt-BR');
 export function reportGeral(c) {
   const tag = `FECHAMENTO DE PERDAS<br><span>Gerado em ${today()}</span>`, sub = `${c.label} · ${LOJA.nome}`;
   const P = [];
-  P.push(header('Fechamento de Perdas', sub, tag) + secResumo(c) + secGlossario());
+  P.push(header('Fechamento de Perdas', sub, tag) + secResumo(c) + secAcoes(c));
+  P.push(header('Como ler este relatório', sub, tag) + guia([
+    ['Resumo', 'quanto a loja perdeu, quanto venceu e quanto estragou, e o que fazer primeiro (página 1).'],
+    ['Onde perdemos mais', 'ranking dos setores, a tabela completa e os setores menores comparados entre si.'],
+    ['Açougue e Frios', 'os dois setores que mais perdem, abertos por tipo de produto, com quilos e R$ por kg.'],
+    ['Dia a dia', 'em que dias a perda foi maior (quando há relatórios diários).'],
+    ['Produtos', 'os que mais deram perda — todos juntos e depois separados em vendidos por quilo e por unidade.'],
+    ['Produtos que se repetem', 'os que venceram e estragaram no mesmo mês e os recolhidos muitas vezes.'],
+    ['Perda x Venda e metas', 'quanto cada setor perdeu para cada R$ 100 que vendeu, com o sinal verde, amarelo ou vermelho.'],
+  ]) + secLegenda() + secGlossario());
   P.push(header('Onde perdemos mais', sub, tag) + secRanking(c));
   P.push(header('Todos os setores', sub, tag) + secTabela(c));
   P.push(header('Setores menores', sub, tag) + secDemais(c));
@@ -187,9 +236,15 @@ export function reportSetor(c, key, val, titulo) {
   }
   p1 += `<div class="big">De cada <b>R$ 100</b> perdidos aqui, <b>R$ ${num(cs.ven / cs.tot * 100)}</b> venceram e <b>R$ ${num(cs.ava / cs.tot * 100)}</b> estragaram. Isso responde por <b>${pct(cs.tot / c.tot)}</b> de toda a perda da loja.</div>`;
   P.push(p1);
+  P.push(header(titulo, `${c.label} · o que fazer e como ler este relatório`, tag) + secAcoes(c, rr) + guia([
+    ['Resumo do setor', 'quanto perdeu, quanto venceu, quanto estragou e o peso na loja (página 1).'],
+    ['O que fazer agora', 'os produtos para atacar primeiro e o tipo de ação (esta página).'],
+    ['Por quilo e por unidade', 'os que mais venceram e os que mais estragaram, separados entre pesados (kg) e contados (un).'],
+    ['Lista completa', 'todos os produtos com perda no mês, do maior para o menor, com o total no final.'],
+  ]) + secLegenda() + secGlossario());
   for (const [unit, nome] of [['kg', 'por quilo (kg)'], ['un', 'por unidade (un)']]) {
     if (!cs.cons.some(a => a.unit === unit)) continue;
-    P.push(header(titulo, `${c.label} · produtos vendidos ${nome}`, tag) + `<h2>Os que mais venceram — ${nome}</h2>${tblTipo(cs.cons, 'ven', unit, 10)}<h2>Os que mais estragaram — ${nome}</h2>${tblTipo(cs.cons, 'ava', unit, 10)}`);
+    P.push(header(titulo, `${c.label} · produtos vendidos ${nome}`, tag) + `<h2>Os que mais venceram — ${nome}</h2>${tblTipo(cs.cons, 'ven', unit, 10)}<h2>Os que mais estragaram — ${nome}</h2>${tblTipo(cs.cons, 'ava', unit, 10)}${lerUnit(unit)}`);
   }
   const CH = 30;
   for (const [unit, nome] of [['kg', 'por quilo (kg)'], ['un', 'por unidade (un)']]) {
@@ -197,6 +252,7 @@ export function reportSetor(c, key, val, titulo) {
     for (let i = 0; i < lst.length; i += CH) {
       let p = header(titulo, `${c.label} · lista completa — produtos ${nome} · ${lst.length} produtos · parte ${i / CH + 1}`, tag) + tblItems(lst.slice(i, i + CH), { mix: key !== 'mix', start: i + 1, total: cs.tot });
       if (i + CH >= lst.length) p += `<table style="margin-top:4px"><tr class="tot"><td>TOTAL — produtos ${nome}</td><td class="n">${brl(tu)} · ${pct(tu / cs.tot)} do total</td></tr></table>`;
+      p += ler(`lista de <b>todos</b> os produtos ${nome} com perda no mês, do que mais perdeu para o que menos perdeu. <b>Quanto perdeu</b> = quantidade; <b>Vencido</b> e <b>Avariado</b> = valor de cada tipo; <b>% do total</b> = peso do produto na perda deste relatório; <b>Vezes</b> = quantas vezes foi recolhido.`);
       P.push(p);
     }
   }

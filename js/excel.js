@@ -22,8 +22,37 @@ function sheet(title, sub, cols, rows, fmts, totCols) {
   return ws;
 }
 
+const GUIA = [
+  ['O QUE É CADA ABA', ''],
+  ['PRODUTOS POR KG', 'Produtos vendidos por quilo (pesados na balança), somados no mês, do que mais perdeu para o que menos perdeu.'],
+  ['PRODUTOS POR UNIDADE', 'Produtos vendidos por unidade (contados um a um), somados no mês, do que mais perdeu para o que menos perdeu.'],
+  ['REGISTROS', 'Cada lançamento de perda, com a data, o tipo (vencido ou avariado), o setor, o encarregado e o gerente.'],
+  ['', ''],
+  ['O QUE SIGNIFICA CADA COLUNA', ''],
+  ['PLU', 'Código do produto no sistema.'],
+  ['Setor', 'Área da loja e equipe responsável (ex.: Açougue, Corredor 1).'],
+  ['Tipo de produto', 'Divisão dentro do setor (ex.: bovinos, iogurtes, queijos).'],
+  ['Quilos / Unidades', 'Quantidade total perdida no mês.'],
+  ['Vencido (R$)', 'Valor dos produtos que passaram da validade.'],
+  ['Avariado (R$)', 'Valor dos produtos que estragaram, quebraram ou ficaram impróprios para venda.'],
+  ['Total (R$)', 'Vencido + avariado. Os valores são a preço de custo (o que pagamos ao fornecedor).'],
+  ['Vezes recolhido', 'Quantas vezes o produto foi lançado como perda no mês. Muitas vezes = problema que se repete.'],
+  ['', ''],
+  ['DICAS', ''],
+  ['Filtro', 'Use as setas no cabeçalho de cada coluna para filtrar por setor, tipo ou encarregado.'],
+  ['Linha verde', 'A última linha verde de cada aba é o TOTAL.'],
+  ['Onde agir', 'Comece pelos primeiros produtos da lista: poucos produtos costumam causar a maior parte da perda.'],
+];
+function guiaSheet(nome, label) {
+  const data = [[cell('SUPERVILLE · COMO LER ESTA PLANILHA', TIT), cell('', TIT)], [cell(`${nome} · ${label} · Loja 1`, SUB), cell('', SUB)], []];
+  GUIA.forEach((r, i) => data.push(r[1] === '' && r[0] ? [cell(r[0], HDR), cell('', HDR)] : [cell(r[0], BODY(i, { font: { name: 'Arial', sz: 10, bold: true } })), cell(r[1], BODY(i, { font: { name: 'Arial', sz: 10 }, alignment: { wrapText: true, vertical: 'center' } }))]));
+  const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{ wch: 26 }, { wch: 100 }]; ws['!rows'] = [{ hpt: 24 }, { hpt: 16 }];
+  return ws;
+}
+
 export function exportExcel(nome, label, cons, rows) {
   const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, guiaSheet(nome, label), 'COMO LER');
   for (const [unit, t, qn] of [['kg', 'PRODUTOS POR KG', 'Quilos'], ['un', 'PRODUTOS POR UNIDADE', 'Unidades']]) {
     const lst = cons.filter(a => a.unit === unit);
     const fq = unit === 'kg' ? '#,##0.000' : '#,##0';
