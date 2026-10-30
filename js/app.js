@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '18';
+export const APP_V = '19';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -28,6 +28,7 @@ checkVersion();
 
 const state = { mes: '', tab: 'painel', imports: [], vendas: null, rows: [], user: null };
 const hoje = new Date();
+const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const mesAtual = () => `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
 const mesLabel = m => { const [y, mm] = m.split('-'); return `${MESES[+mm]}/${y}`; };
 const ANO0 = 2026;
@@ -96,8 +97,8 @@ function render() {
 function painel(m) {
   if (!state.rows.length) { m.innerHTML = `<div class="card empty"><b>Nenhuma perda importada em ${mesLabel(state.mes)}.</b><br><br>Vá na aba <b>Importar</b> e envie os relatórios de vencidos e avariados.</div>`; return; }
   const c = R.ctxOf(state.rows, state.mes, state.vendas);
-  const dias = new Set(state.rows.map(x => x.data)).size;
-  m.innerHTML = `<div class="card"><div class="flex"><h2 style="margin:0">Resumo de ${mesLabel(state.mes)}</h2><span class="muted">${dias} dia(s) importado(s) · ${state.vendas ? 'vendas importadas ✔' : 'vendas do mês ainda não importadas'}</span></div>${R.secResumo(c)}</div>
+  const dias = new Set(state.rows.filter(x => x.origem !== 'Ajuste do fechamento').map(x => x.data)).size;
+  m.innerHTML = `${intro('Painel: o resumo do mês escolhido no topo. Atualiza na hora a cada relatório enviado. Para trocar de mês, use a lista no canto de cima.')}<div class="card"><div class="flex"><h2 style="margin:0">Resumo de ${mesLabel(state.mes)}</h2><span class="muted">${dias} dia(s) importado(s) · ${state.vendas ? 'vendas importadas ✔' : 'vendas do mês ainda não importadas'}</span></div>${R.secResumo(c)}</div>
     <div class="card">${R.secRanking(c)}</div>
     <div class="card">${R.secVenda(c)}${R.secVendaTabela(c)}</div>
     ${dias > 1 ? `<div class="card">${R.secEvolucao(c)}</div>` : ''}
@@ -110,28 +111,30 @@ function painel(m) {
 
 // ---------------- importar ----------------
 function importar(m) {
-  m.innerHTML = `<div class="card"><h2>Relatórios do dia — Trocas de Fornecedores</h2>
+  m.innerHTML = `${intro('Como enviar os relatórios do dia', ['No sistema, tire o <b>Trocas de Fornecedores</b> de <b>vencidos</b> e o de <b>avariados</b> da Loja 1 e salve cada um em PDF.', 'Arraste cada PDF para o quadro certo aqui embaixo (ou clique no quadro e escolha o arquivo).', 'Espere aparecer <b>✔ Deu certo!</b>. O dia fica <b>verde</b> no calendário.'])}
+    <div class="card"><h2>Dias enviados em ${mesLabel(state.mes)}</h2>${calendarioMes()}</div>
+    <div class="card"><h2>Relatórios do dia — Trocas de Fornecedores</h2>
     <p class="muted">Envie o PDF de <b>vencidos</b> e o de <b>avariados</b>. No relatório <b>com data (DT.INC)</b>, cada item entra no dia em que foi lançado — pode mandar o acumulado do mês todo dia, ele substitui sem duplicar. O relatório <b>geral</b> (vencidos + avariados juntos) também pode ir em qualquer um dos dois quadros: o site separa pelo motivo.</p>
     <label class="field" style="max-width:420px;margin-bottom:12px">Mês de referência
       <select id="refmes"><option value="">Automático — usar a data do relatório (uso diário)</option>
       ${mesesOpcoes().map(m => `<option value="${m}">${mesLabel(m)} — relatório do mês inteiro (histórico)</option>`).join('')}</select>
       <span class="muted" style="font-weight:400">Para meses passados, escolha o mês: o relatório entra no último dia daquele mês.</span></label>
     <label class="field" style="max-width:420px;margin-bottom:12px">Data dos relatórios
-      <input type="date" id="refdia" max="${hoje.toISOString().slice(0, 10)}">
+      <input type="date" id="refdia" max="${hojeISO()}">
       <span class="muted" style="font-weight:400">Deixe em branco para usar a data impressa no relatório. Se tirou o relatório no dia seguinte, escolha aqui o dia certo das perdas.</span></label>
     <div class="grid2"><div class="drop" data-tipo="VENCIDO"><b>Vencidos</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div>
-    <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg"></div></div>
+    <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg">${msgsHTML('#imsg')}</div></div>
     <div class="card"><h2>Fechamento do mês — bater com o sistema</h2>
     <p class="muted">No fim do mês, tire do sistema o <b>Trocas de Fornecedores do mês inteiro</b>: vencidos, avariados e o total. O site compara produto por produto com o que foi enviado no dia a dia e lança um <b>ajuste do fechamento</b> com a diferença (custo atualizado, arredondamento, lançamentos alterados depois), para o mês ficar igual ao do sistema. Os dias continuam como estão. Pode refazer quantas vezes quiser: o ajuste é recalculado, não duplica.</p>
     <label class="field" style="max-width:260px;margin-bottom:12px">Mês do fechamento<select id="fmes">${mesesOpcoes().filter(k => k <= mesAtual()).map(k => `<option value="${k}" ${k === (state.fech?.mes || mesFechPadrao()) ? 'selected' : ''}>${mesLabel(k)}</option>`).join('')}</select></label>
     <div class="grid3"><div class="drop" data-tipo="FVENCIDO"><b>Vencidos do mês</b><span class="muted">${state.fech?.VENCIDO ? '✔ ' + esc(state.fech.VENCIDO.arquivo) : 'PDF do mês inteiro'}</span><input type="file" accept="application/pdf" hidden></div>
     <div class="drop" data-tipo="FAVARIADO"><b>Avariados do mês</b><span class="muted">${state.fech?.AVARIADO ? '✔ ' + esc(state.fech.AVARIADO.arquivo) : 'PDF do mês inteiro'}</span><input type="file" accept="application/pdf" hidden></div>
     <div class="drop" data-tipo="FTOTAL"><b>Total do mês</b><span class="muted">${state.fech?.TOTAL ? '✔ ' + esc(state.fech.TOTAL.arquivo) : 'PDF geral (para conferir)'}</span><input type="file" accept="application/pdf" hidden></div></div>
-    <div id="fres"></div></div>
+    <div id="fres">${msgsHTML('#fres')}</div><div id="fprev"></div></div>
     ${isAdmin() ? `    <div class="card"><h2>Vendas do mês — Rentabilidade de Vendas</h2><p class="muted">Envie no início do mês o relatório do mês anterior (só a coluna Venda e o lucro bruto são usados).</p>
-    <div class="drop" data-tipo="VENDAS"><b>Vendas</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden></div><div id="vmsg"></div></div>` : ''}
+    <div class="drop" data-tipo="VENDAS"><b>Vendas</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden></div><div id="vmsg">${msgsHTML('#vmsg')}</div></div>` : ''}
     ${isAdmin() ? `    <div class="card"><h2>Histórico / backup (JSON)</h2><p class="muted">Para carregar meses antigos (ex.: setembro/2026 da planilha) ou restaurar um backup.</p>
-    <div class="drop" data-tipo="JSON"><b>Arquivo .json</b><span class="muted">clique ou arraste aqui</span><input type="file" accept=".json,application/json" hidden></div><div id="jmsg"></div></div>` : ''}`;
+    <div class="drop" data-tipo="JSON"><b>Arquivo .json</b><span class="muted">clique ou arraste aqui</span><input type="file" accept=".json,application/json" hidden></div><div id="jmsg">${msgsHTML('#jmsg')}</div></div>` : ''}`;
   m.querySelectorAll('.drop').forEach(d => {
     const inp = d.querySelector('input');
     d.onclick = () => inp.click();
@@ -157,6 +160,7 @@ async function handleFech(tipo, f) {
   if (r.totalRelatorio != null && Math.abs(r.totalRelatorio - r.total) > 0.5) throw new Error(`Alguns itens não foram lidos (lido ${brl(r.total)}, relatório ${brl(r.totalRelatorio)}). Avise o administrador.`);
   const items = tipo === 'TOTAL' ? r.items : r.items.filter(x => !x.mot || x.mot === (tipo === 'VENCIDO' ? 'VEN' : 'AVA'));
   state.fech[tipo] = { arquivo: f.name, items, total: r2(items.reduce((s, x) => s + x.valor, 0)) };
+  msg('#fres', 'ok', `<b>${esc(f.name)}</b> lido com sucesso: ${tipo === 'VENCIDO' ? 'vencidos' : tipo === 'AVARIADO' ? 'avariados' : 'total'} de ${mesLabel(mes)}, ${items.length} itens, ${brl(state.fech[tipo].total)}. Confira a tabela abaixo antes de lançar o ajuste.`);
   render();
 }
 
@@ -183,7 +187,7 @@ function calcAjuste(sist, site) {
 }
 
 async function previaFech() {
-  const F = state.fech, el = $('#fres'); if (!el) return;
+  const F = state.fech, el = $('#fprev'); if (!el) return;
   el.innerHTML = '<div class="msg info">Comparando com o que está no site…</div>';
   const S = await sitePorProduto(F.mes);
   const nome = { VENCIDO: 'Vencidos', AVARIADO: 'Avariados' };
@@ -228,10 +232,41 @@ async function aplicarFech() {
     if (F.mes === state.mes) { await loadMes(); state.tab = 'importar'; render(); }
   } catch (e) { console.error(e); msg('#fres', 'err', '✖ ' + esc(e.message)); }
 }
-const msg = (id, cls, html) => { const el = $(id); if (el) el.innerHTML += `<div class="msg ${cls}">${html}</div>`; };
+// mensagens: ficam guardadas e reaparecem mesmo depois que a tela é redesenhada
+state.msgs = {};
+const msg = (id, cls, html) => {
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  (state.msgs[id] ||= []).unshift({ cls, html, hora }); state.msgs[id] = state.msgs[id].slice(0, 12);
+  const el = $(id); if (el) el.innerHTML = msgsHTML(id);
+  if (cls === 'ok' || cls === 'err') toast(cls, html);
+};
+const msgsHTML = id => (state.msgs[id] || []).map((x, i) => `<div class="msg ${x.cls}"${i ? ' style="opacity:.75"' : ''}><span class="hora">${x.hora}</span> ${x.html}</div>`).join('');
+function toast(cls, html, ms = 7000) {
+  let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.className = 'toast ' + cls; t.innerHTML = `<b>${cls === 'ok' ? '✔ Deu certo!' : cls === 'err' ? '✖ Não deu certo' : '⏳ Aguarde…'}</b><div>${html}</div>`; t.style.display = 'block';
+  clearTimeout(t._h); if (ms) t._h = setTimeout(() => t.style.display = 'none', ms);
+}
+const intro = (t, passos) => `<div class="intro"><b>${t}</b>${passos ? `<ol>${passos.map(p => `<li>${p}</li>`).join('')}</ol>` : ''}</div>`;
+
+// calendário do mês: quais dias já foram enviados
+function calendarioMes() {
+  const mes = state.mes, [y, m] = mes.split('-').map(Number), n = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay();
+  const tem = {}; state.imports.filter(i => !i.ajuste).forEach(i => { if (i.data.startsWith(mes)) (tem[+i.data.slice(8)] ||= {})[i.tipo] = i; });
+  const hojeK = hojeISO();
+  let h = '<div class="cal">' + ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => `<div class="cal-h">${d}</div>`).join('') + '<div></div>'.repeat(first);
+  for (let d = 1; d <= n; d++) {
+    const k = `${mes}-${String(d).padStart(2, '0')}`, t = tem[d] || {}, fut = k > hojeK;
+    const st = t.VENCIDO && t.AVARIADO ? 'ok' : t.VENCIDO || t.AVARIADO ? 'meio' : fut ? 'fut' : 'falta';
+    const tip = `${d}/${m}: ${t.VENCIDO ? 'vencidos ' + brl(t.VENCIDO.total) : 'sem vencidos'} · ${t.AVARIADO ? 'avariados ' + brl(t.AVARIADO.total) : 'sem avariados'}`;
+    h += `<div class="cal-d ${st}${k === hojeK ? ' hoje' : ''}" title="${tip}"><span>${d}</span><i>${t.VENCIDO ? 'V✔' : fut ? '' : 'V–'} ${t.AVARIADO ? 'A✔' : fut ? '' : 'A–'}</i></div>`;
+  }
+  const aj = state.imports.filter(i => i.ajuste);
+  return h + `</div><div class="small cal-leg"><span class="cal-d ok"></span> vencidos e avariados enviados <span class="cal-d meio"></span> falta um dos dois <span class="cal-d falta"></span> nada enviado <span class="cal-d fut"></span> dia que ainda não chegou · V = vencidos, A = avariados · passe o mouse no dia para ver os valores${aj.length ? ` · ✔ ajuste do fechamento lançado (${aj.map(a => (a.tipo === 'VENCIDO' ? 'vencidos ' : 'avariados ') + brl(a.total)).join(', ')})` : ''}</div>`;
+}
 
 async function handle(tipo, files) {
   for (const f of files) {
+    toast('info', `Lendo <b>${esc(f.name)}</b>…`, 0);
     try {
       if (tipo === 'VENDAS') {
         const v = await parseVendas(f);
@@ -289,12 +324,13 @@ async function handle(tipo, files) {
         const tipos = [...new Set(lst.map(g => g.tipo))].map(t => nome[t]).join(' e ');
         const dias = [...new Set(lst.map(g => g.data))].sort();
         const quando = dias.length > 1 ? `${dias.length} dias (${dias[0].split('-').reverse().join('/')} a ${dias.at(-1).split('-').reverse().join('/')}), separados pela data de cada item` : dias[0].split('-').reverse().join('/');
-        msg('#imsg', 'ok', `✔ <b>${tipos}</b> — ${quando}: ${r.items.length} itens, ${brl(r.total)}.${conf}${semMix ? ` ${semMix} item(ns) sem setor — veja a aba <b>Classificar</b>.` : ''}`);
+        msg('#imsg', 'ok', `<b>${esc(f.name)}</b> importado com sucesso — <b>${tipos}</b> de ${quando}: ${r.items.length} itens, ${brl(r.total)}.${conf}${semMix ? ` ${semMix} item(ns) sem setor — veja a aba <b>Classificar</b>.` : ''}`);
         const mes = dias.at(-1).slice(0, 7);
         if (mes !== state.mes) { state.mes = mes; renderShell(); }
         await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       }
-    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `✖ ${esc(f.name)}: ${esc(e.message)}`); }
+    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `<b>${esc(f.name)}</b> não foi importado: ${esc(e.message)}`); }
+    finally { const t = $('#toast'); if (t && t.classList.contains('info')) t.style.display = 'none'; }
   }
 }
 function renderShellTabs() { document.querySelectorAll('nav a').forEach(b => b.classList.toggle('on', b.dataset.t === state.tab)); const s = $('#mes'); if (s) s.value = state.mes; }
@@ -340,7 +376,7 @@ function relatorios(m) {
 
 // ---------------- histórico ----------------
 function historico(m) {
-  m.innerHTML = `<div class="card"><h2>Relatórios importados em ${mesLabel(state.mes)}</h2>
+  m.innerHTML = `${intro('Histórico: a lista de tudo o que foi enviado no mês, com data, arquivo, valor e quem enviou. Enviou um dia errado? Envie o PDF certo de novo na aba Importar: ele substitui o anterior.')}<div class="card"><h2>Relatórios importados em ${mesLabel(state.mes)}</h2>
     ${state.imports.length ? `<table><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th class="n">Itens</th><th class="n">Total</th><th>Enviado por</th><th></th></tr>
     ${state.imports.map(i => `<tr><td>${i.data.split('-').reverse().join('/')}</td><td>${i.tipo}</td><td>${esc(i.arquivo || '')}</td><td class="n">${num(i.items.length)}</td><td class="n">${brl(i.total)}</td><td>${esc(i.criadoPor || '')}</td><td>${isAdmin() ? `<button class="btn red" data-del="${esc(i.id)}">Excluir</button>` : ''}</td></tr>`).join('')}
     <tr class="tot"><td colspan="3">TOTAL DO MÊS</td><td class="n">${num(state.imports.reduce((s, i) => s + i.items.length, 0))}</td><td class="n">${brl(state.imports.reduce((s, i) => s + i.total, 0))}</td><td colspan="2"></td></tr></table>` : '<div class="empty">Nada importado neste mês.</div>'}
