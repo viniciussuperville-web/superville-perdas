@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '20';
+export const APP_V = '21';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -356,7 +356,7 @@ function classificar(m) {
 // ---------------- relatórios ----------------
 function relatorios(m) {
   if (!state.rows.length) { m.innerHTML = `<div class="card empty">Sem dados em ${mesLabel(state.mes)}.</div>`; return; }
-  const mixes = [...new Set(state.rows.map(x => x.mix))].sort(), gers = [...new Set(state.rows.map(x => x.ger).filter(Boolean))].sort(), encs = [...new Set(state.rows.map(x => x.enc).filter(Boolean))].sort();
+  const mixes = [...new Set(state.rows.map(x => x.mix))].filter(x => x !== 'A CLASSIFICAR').sort(), gers = [...new Set(state.rows.map(x => x.ger).filter(Boolean))].sort(), encs = [...new Set(state.rows.map(x => x.enc).filter(Boolean))].sort();
   m.innerHTML = `<div class="card"><h2>Fechamento do mês — loja inteira</h2><p class="muted">Relatório completo para o proprietário: resumo, setores, Açougue e Frios, produtos por quilo e por unidade, perda x venda e metas.</p>
     <div class="flex"><button class="btn" id="rg">Abrir fechamento (PDF)</button><button class="btn out" id="xg">Baixar Excel da loja</button></div>
     ${state.vendas ? '' : '<div class="msg info">As vendas deste mês ainda não foram importadas — a parte de perda x venda vai sair como "aguardando".</div>'}</div>

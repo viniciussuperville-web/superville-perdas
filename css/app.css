@@ -32,7 +32,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
 .intro{background:#111;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px;border-left:6px solid var(--green);font-size:13px}
 .intro b{color:#fff} .intro ol{margin:8px 0 0;padding-left:20px} .intro li{margin:3px 0;color:#e6e6e6} .intro li b{color:var(--green)}
 .toast{position:fixed;right:20px;bottom:20px;z-index:100;max-width:420px;background:#fff;border-radius:12px;padding:14px 18px;box-shadow:0 10px 30px rgba(0,0,0,.25);border-left:6px solid var(--green);font-size:13px;display:none}
-.toast b{display:block;font-size:15px;margin-bottom:3px} .toast.ok b{color:var(--dgreen)} .toast.err{border-left-color:var(--red)} .toast.err b{color:var(--red)} .toast.info{border-left-color:var(--yel)}
+.toast>b{display:block;font-size:15px;margin-bottom:3px} .toast.ok>b{color:var(--dgreen)} .toast.err{border-left-color:var(--red)} .toast.err>b{color:var(--red)} .toast.info{border-left-color:var(--yel)}
 .msg .hora{font-size:11px;color:#888;margin-right:4px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:640px}
 .cal-h{font-size:11px;font-weight:700;color:#777;text-align:center}
