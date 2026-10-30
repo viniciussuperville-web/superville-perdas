@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '19';
+export const APP_V = '20';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -329,7 +329,7 @@ async function handle(tipo, files) {
         if (mes !== state.mes) { state.mes = mes; renderShell(); }
         await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       }
-    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `<b>${esc(f.name)}</b> não foi importado: ${esc(e.message)}`); }
+    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `<b>${esc(f.name)}</b> não foi importado: ${esc(/invalid pdf|pdf structure|missing pdf/i.test(e.message) ? 'o arquivo não é um PDF válido ou está corrompido. Gere o PDF de novo no sistema.' : /permission|insufficient/i.test(e.message) ? 'sem permissão para gravar. Saia e entre de novo no site.' : /network|offline|unavailable/i.test(e.message) ? 'sem conexão com a internet. Tente de novo em instantes.' : e.message)}`); }
     finally { const t = $('#toast'); if (t && t.classList.contains('info')) t.style.display = 'none'; }
   }
 }
