@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '17';
+export const APP_V = '18';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -217,7 +217,7 @@ async function aplicarFech() {
       if (!F.calc?.[t]) continue;
       const id = `${LOJA.id}_${F.mes}_AJUSTE_${t}`, adj = F.calc[t];
       if (!adj.length) { await db.collection('imports').doc(id).delete(); continue; }
-      const items = adj.map(x => ({ plu: x.plu, desc: x.desc, cod: x.cod, qtd: x.qtd, valor: x.valor, dia: ult, origem: 'Ajuste do fechamento' }));
+      const items = adj.map(x => ({ plu: x.plu, desc: x.desc || '', cod: x.cod || '', qtd: x.qtd, valor: x.valor, dia: ult, origem: 'Ajuste do fechamento' }));
       await db.collection('imports').doc(id).set({ loja: LOJA.id, data: ult, mes: F.mes, tipo: t, ajuste: true, arquivo: `Ajuste do fechamento — ${F[t].arquivo}`, items,
         total: r2(items.reduce((s, x) => s + x.valor, 0)), n: items.length, criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
     }
