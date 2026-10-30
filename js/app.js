@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '16';
+export const APP_V = '17';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -116,8 +116,18 @@ function importar(m) {
       <select id="refmes"><option value="">Automático — usar a data do relatório (uso diário)</option>
       ${mesesOpcoes().map(m => `<option value="${m}">${mesLabel(m)} — relatório do mês inteiro (histórico)</option>`).join('')}</select>
       <span class="muted" style="font-weight:400">Para meses passados, escolha o mês: o relatório entra no último dia daquele mês.</span></label>
+    <label class="field" style="max-width:420px;margin-bottom:12px">Data dos relatórios
+      <input type="date" id="refdia" max="${hoje.toISOString().slice(0, 10)}">
+      <span class="muted" style="font-weight:400">Deixe em branco para usar a data impressa no relatório. Se tirou o relatório no dia seguinte, escolha aqui o dia certo das perdas.</span></label>
     <div class="grid2"><div class="drop" data-tipo="VENCIDO"><b>Vencidos</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div>
     <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg"></div></div>
+    <div class="card"><h2>Fechamento do mês — bater com o sistema</h2>
+    <p class="muted">No fim do mês, tire do sistema o <b>Trocas de Fornecedores do mês inteiro</b>: vencidos, avariados e o total. O site compara produto por produto com o que foi enviado no dia a dia e lança um <b>ajuste do fechamento</b> com a diferença (custo atualizado, arredondamento, lançamentos alterados depois), para o mês ficar igual ao do sistema. Os dias continuam como estão. Pode refazer quantas vezes quiser: o ajuste é recalculado, não duplica.</p>
+    <label class="field" style="max-width:260px;margin-bottom:12px">Mês do fechamento<select id="fmes">${mesesOpcoes().filter(k => k <= mesAtual()).map(k => `<option value="${k}" ${k === (state.fech?.mes || mesFechPadrao()) ? 'selected' : ''}>${mesLabel(k)}</option>`).join('')}</select></label>
+    <div class="grid3"><div class="drop" data-tipo="FVENCIDO"><b>Vencidos do mês</b><span class="muted">${state.fech?.VENCIDO ? '✔ ' + esc(state.fech.VENCIDO.arquivo) : 'PDF do mês inteiro'}</span><input type="file" accept="application/pdf" hidden></div>
+    <div class="drop" data-tipo="FAVARIADO"><b>Avariados do mês</b><span class="muted">${state.fech?.AVARIADO ? '✔ ' + esc(state.fech.AVARIADO.arquivo) : 'PDF do mês inteiro'}</span><input type="file" accept="application/pdf" hidden></div>
+    <div class="drop" data-tipo="FTOTAL"><b>Total do mês</b><span class="muted">${state.fech?.TOTAL ? '✔ ' + esc(state.fech.TOTAL.arquivo) : 'PDF geral (para conferir)'}</span><input type="file" accept="application/pdf" hidden></div></div>
+    <div id="fres"></div></div>
     ${isAdmin() ? `    <div class="card"><h2>Vendas do mês — Rentabilidade de Vendas</h2><p class="muted">Envie no início do mês o relatório do mês anterior (só a coluna Venda e o lucro bruto são usados).</p>
     <div class="drop" data-tipo="VENDAS"><b>Vendas</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden></div><div id="vmsg"></div></div>` : ''}
     ${isAdmin() ? `    <div class="card"><h2>Histórico / backup (JSON)</h2><p class="muted">Para carregar meses antigos (ex.: setembro/2026 da planilha) ou restaurar um backup.</p>
@@ -129,6 +139,94 @@ function importar(m) {
     d.ondrop = e => { e.preventDefault(); d.classList.remove('on'); handle(d.dataset.tipo, [...e.dataTransfer.files]); };
     inp.onchange = () => handle(d.dataset.tipo, [...inp.files]);
   });
+  const fm = $('#fmes'); if (fm) fm.onchange = () => { state.fech = { mes: fm.value }; render(); };
+  if (state.fech && (state.fech.VENCIDO || state.fech.AVARIADO || state.fech.TOTAL)) previaFech();
+}
+const mesFechPadrao = () => { const d = new Date(hoje); if (d.getDate() <= 10) d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const ultimoDia = mes => { const [y, m] = mes.split('-').map(Number); return `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; };
+const r2 = v => Math.round(v * 100) / 100;
+
+// ---------------- fechamento do mês ----------------
+async function handleFech(tipo, f) {
+  const mes = $('#fmes')?.value || mesFechPadrao();
+  if (!state.fech || state.fech.mes !== mes) state.fech = { mes };
+  const r = await parseTrocas(f);
+  if (!r.items.length) throw new Error('Nenhum item encontrado no PDF.');
+  if (r.loja && r.loja !== LOJA.id) throw new Error(`O relatório é da loja ${r.loja}; este painel é da loja ${LOJA.id}.`);
+  if (anoFechado(mes.slice(0, 4))) throw new Error(`O ano ${mes.slice(0, 4)} está fechado. Reabra o ano na aba Anual para ajustar.`);
+  if (r.totalRelatorio != null && Math.abs(r.totalRelatorio - r.total) > 0.5) throw new Error(`Alguns itens não foram lidos (lido ${brl(r.total)}, relatório ${brl(r.totalRelatorio)}). Avise o administrador.`);
+  const items = tipo === 'TOTAL' ? r.items : r.items.filter(x => !x.mot || x.mot === (tipo === 'VENCIDO' ? 'VEN' : 'AVA'));
+  state.fech[tipo] = { arquivo: f.name, items, total: r2(items.reduce((s, x) => s + x.valor, 0)) };
+  render();
+}
+
+async function sitePorProduto(mes) {
+  const q = await db.collection('imports').where('mes', '==', mes).get();
+  const docs = q.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.loja === LOJA.id);
+  const por = { VENCIDO: {}, AVARIADO: {} }, tot = { VENCIDO: 0, AVARIADO: 0 }, ajuste = {};
+  for (const d of docs) {
+    if (d.ajuste) { ajuste[d.tipo] = d; continue; }
+    tot[d.tipo] += d.total;
+    for (const it of d.items) { const a = por[d.tipo][it.plu] ||= { qtd: 0, valor: 0, desc: it.desc, cod: it.cod || '' }; a.qtd += Number(it.qtd) || 0; a.valor += it.valor; }
+  }
+  return { por, tot, ajuste };
+}
+
+function calcAjuste(sist, site) {
+  const S = {}; for (const x of sist) { const a = S[x.plu] ||= { qtd: 0, valor: 0, desc: x.desc, cod: x.cod || '' }; a.qtd += Number(x.qtd) || 0; a.valor += x.valor; }
+  const lst = [];
+  for (const plu of new Set([...Object.keys(S), ...Object.keys(site)])) {
+    const a = S[plu] || { qtd: 0, valor: 0 }, b = site[plu] || { qtd: 0, valor: 0 }, dv = r2(a.valor - b.valor), dq = Math.round((a.qtd - b.qtd) * 1000) / 1000;
+    if (Math.abs(dv) >= 0.01 || Math.abs(dq) >= 0.001) lst.push({ plu, desc: (S[plu] || site[plu]).desc, cod: (S[plu] || site[plu]).cod, qtd: dq, valor: dv, sistema: r2(a.valor), site: r2(b.valor), noSite: !site[plu], noSistema: !S[plu] });
+  }
+  return lst.sort((x, y) => Math.abs(y.valor) - Math.abs(x.valor));
+}
+
+async function previaFech() {
+  const F = state.fech, el = $('#fres'); if (!el) return;
+  el.innerHTML = '<div class="msg info">Comparando com o que está no site…</div>';
+  const S = await sitePorProduto(F.mes);
+  const nome = { VENCIDO: 'Vencidos', AVARIADO: 'Avariados' };
+  let h = `<h2>Conferência de ${mesLabel(F.mes)}</h2><table><tr><th>Tipo</th><th class="n">Sistema (mês)</th><th class="n">Site (dia a dia)</th><th class="n">Diferença</th><th class="n">Produtos a ajustar</th><th>Situação</th></tr>`;
+  F.calc = {};
+  for (const t of ['VENCIDO', 'AVARIADO']) {
+    if (!F[t]) { h += `<tr><td><b>${nome[t]}</b></td><td colspan="5" class="muted">envie o PDF do mês</td></tr>`; continue; }
+    const adj = calcAjuste(F[t].items, S.por[t]); F.calc[t] = adj;
+    const dif = r2(F[t].total - S.tot[t]), atual = S.ajuste[t] ? r2(S.ajuste[t].total) : 0;
+    h += `<tr><td><b>${nome[t]}</b></td><td class="n">${brl(F[t].total)}</td><td class="n">${brl(S.tot[t])}</td><td class="n"><b>${brl(dif)}</b></td><td class="n">${adj.length}</td><td>${!adj.length ? '✔ já bate' : atual && Math.abs(atual - dif) < 0.01 ? '✔ ajuste já lançado' : 'ajuste a lançar'}</td></tr>`;
+  }
+  const sv = r2((F.VENCIDO?.total || 0) + (F.AVARIADO?.total || 0));
+  h += `</table>`;
+  if (F.TOTAL) h += `<div class="msg ${F.VENCIDO && F.AVARIADO && Math.abs(F.TOTAL.total - sv) < 0.5 ? 'ok' : 'info'}">Total do mês no sistema: <b>${brl(F.TOTAL.total)}</b>${F.VENCIDO && F.AVARIADO ? (Math.abs(F.TOTAL.total - sv) < 0.5 ? ' — confere com vencidos + avariados ✔' : ` — vencidos + avariados somam ${brl(sv)}: diferença de <b>${brl(r2(F.TOTAL.total - sv))}</b> (pode ser outro motivo de troca; avise o administrador).`) : ''}</div>`;
+  const todos = [...(F.calc.VENCIDO || []).map(x => ({ ...x, t: 'Vencido' })), ...(F.calc.AVARIADO || []).map(x => ({ ...x, t: 'Avariado' }))].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+  if (todos.length) {
+    h += `<h2>O que vai ser ajustado — da maior diferença para a menor</h2><table><tr><th>Tipo</th><th>Produto</th><th class="n">No sistema</th><th class="n">No site</th><th class="n">Ajuste</th><th>Motivo provável</th></tr>` +
+      todos.slice(0, 25).map(x => `<tr><td>${x.t}</td><td>${esc(x.desc)}</td><td class="n">${brl(x.sistema)}</td><td class="n">${brl(x.site)}</td><td class="n"><b>${x.valor > 0 ? '+' : ''}${brl(x.valor)}</b></td><td>${x.noSite ? 'não foi enviado no dia a dia' : x.noSistema ? 'não está mais no sistema' : Math.abs(x.qtd) >= 0.001 ? 'quantidade alterada no sistema' : Math.abs(x.valor) < 0.1 ? 'arredondamento' : 'custo atualizado'}</td></tr>`).join('') + '</table>' +
+      (todos.length > 25 ? `<div class="small">Mais ${todos.length - 25} produto(s) com diferença menor.</div>` : '') +
+      R.ler('<b>No sistema</b> = valor do produto no relatório do mês. <b>No site</b> = soma do que foi enviado no dia a dia. <b>Ajuste</b> = a diferença que será lançada no último dia do mês, como "Ajuste do fechamento". <b>Custo atualizado</b>: o sistema recalcula o mês com o custo de hoje.') +
+      `<div class="flex" style="margin-top:10px"><button class="btn" id="faplicar">Lançar ajuste do fechamento</button></div>`;
+  }
+  el.innerHTML = h;
+  const b = $('#faplicar'); if (b) b.onclick = () => aplicarFech();
+}
+
+async function aplicarFech() {
+  const F = state.fech, ult = ultimoDia(F.mes);
+  try {
+    for (const t of ['VENCIDO', 'AVARIADO']) {
+      if (!F.calc?.[t]) continue;
+      const id = `${LOJA.id}_${F.mes}_AJUSTE_${t}`, adj = F.calc[t];
+      if (!adj.length) { await db.collection('imports').doc(id).delete(); continue; }
+      const items = adj.map(x => ({ plu: x.plu, desc: x.desc, cod: x.cod, qtd: x.qtd, valor: x.valor, dia: ult, origem: 'Ajuste do fechamento' }));
+      await db.collection('imports').doc(id).set({ loja: LOJA.id, data: ult, mes: F.mes, tipo: t, ajuste: true, arquivo: `Ajuste do fechamento — ${F[t].arquivo}`, items,
+        total: r2(items.reduce((s, x) => s + x.valor, 0)), n: items.length, criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
+    }
+    const S = await sitePorProduto(F.mes);
+    const fim = t => r2(S.tot[t] + (S.ajuste[t]?.total || 0));
+    msg('#fres', 'ok', `✔ Ajuste lançado. ${mesLabel(F.mes)} no site agora: vencidos ${brl(fim('VENCIDO'))}${F.VENCIDO ? ` (sistema ${brl(F.VENCIDO.total)})` : ''} · avariados ${brl(fim('AVARIADO'))}${F.AVARIADO ? ` (sistema ${brl(F.AVARIADO.total)})` : ''}.`);
+    $('#faplicar')?.remove();
+    if (F.mes === state.mes) { await loadMes(); state.tab = 'importar'; render(); }
+  } catch (e) { console.error(e); msg('#fres', 'err', '✖ ' + esc(e.message)); }
 }
 const msg = (id, cls, html) => { const el = $(id); if (el) el.innerHTML += `<div class="msg ${cls}">${html}</div>`; };
 
@@ -154,6 +252,8 @@ async function handle(tipo, files) {
         }
         if (j.vendas) for (const v of j.vendas) await db.collection('vendas').doc(`${v.loja}_${v.mes}`).set(v);
         await loadMes(); state.tab = 'importar'; render();
+      } else if (tipo.startsWith('F')) {
+        await handleFech(tipo.slice(1), f);
       } else {
         const r = await parseTrocas(f);
         if (!r.items.length) throw new Error('Nenhum item encontrado no PDF.');
@@ -164,7 +264,8 @@ async function handle(tipo, files) {
         const tipoDe = x => x.mot === 'VEN' ? 'VENCIDO' : x.mot === 'AVA' ? 'AVARIADO' : tipo;
         const ref = $('#refmes')?.value;
         let dataFixa = r.data;
-        if (ref) { const [ry, rm] = ref.split('-').map(Number); dataFixa = `${ref}-${String(new Date(ry, rm, 0).getDate()).padStart(2, '0')}`; }
+        const refdia = $('#refdia')?.value;
+        if (ref) dataFixa = ultimoDia(ref); else if (refdia) dataFixa = refdia;
         for (const x of r.items) {
           const d = r.comData && !ref ? x.dia : dataFixa, t = r.comData ? tipoDe(x) : tipo, key = d + '|' + t;
           (grupos[key] ||= { data: d, tipo: t, items: [] }).items.push({ plu: x.plu, desc: x.desc, cod: x.cod, qtd: x.qtd, valor: x.valor });
@@ -193,7 +294,7 @@ async function handle(tipo, files) {
         if (mes !== state.mes) { state.mes = mes; renderShell(); }
         await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       }
-    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : '#imsg', 'err', `✖ ${esc(f.name)}: ${esc(e.message)}`); }
+    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `✖ ${esc(f.name)}: ${esc(e.message)}`); }
   }
 }
 function renderShellTabs() { document.querySelectorAll('nav a').forEach(b => b.classList.toggle('on', b.dataset.t === state.tab)); const s = $('#mes'); if (s) s.value = state.mes; }
