@@ -74,7 +74,7 @@ export function secAcoes(c, rr) {
   if (tot && ven / tot >= 0.6) li.push(`<b>A maior parte venceu (${pct(ven / tot, 0)}).</b> Revise a quantidade dos pedidos, faça o rodízio (o mais velho na frente) e confira as validades toda semana para baixar o preço antes de vencer.`);
   else if (tot && ven / tot <= 0.4) li.push(`<b>A maior parte estragou (${pct(1 - ven / tot, 0)}).</b> Revise o manuseio, a temperatura das câmaras e balcões, o armazenamento no estoque e a conferência no recebimento.`);
   else li.push('<b>Vencido e avariado estão equilibrados.</b> Cuide das duas frentes: pedido e validade (vencido) e manuseio e armazenamento (avariado).');
-  if (rep3.length) li.push(`<b>Produtos que se repetem:</b> ${rep3.map(a => `${esc(a.desc)} (${a.n} vezes)`).join(', ')}. Se volta sempre, o pedido ou a exposição precisa mudar.`);
+  if (rep3.length) li.push(`<b>Produtos que se repetem:</b> ${rep3.map(a => `${esc(a.desc)} (${a.n} vezes)`).join(', ')}. Se o produto volta sempre, o pedido ou a exposição precisam mudar.`);
   if (both.length) li.push(`<b>Venceram e também estragaram:</b> ${both.map(a => esc(a.desc)).join(', ')}. Pode ser pedido demais e cuidado de menos ao mesmo tempo.`);
   return '<h2>O que fazer agora</h2><div class="hl"><ul>' + li.map(x => `<li>${x}</li>`).join('') + '</ul></div>';
 }
@@ -92,7 +92,7 @@ export function secTabela(c) {
 
 export const secDemais = c => '<h2>Os demais setores lado a lado (sem Açougue, Frios e Pães)</h2>' +
   hbar(c.bymix.filter(([k]) => !['Açougue e Peixaria', 'Frios e Laticínios', 'Pães e Bolos'].includes(k)).slice(0, 14), c.tot) +
-  ler('Açougue, Frios e Pães perdem muito mais que os outros e "esmagariam" este gráfico. Aqui eles ficam de fora para dar para comparar os setores menores entre si. A porcentagem no fim da barra continua sendo sobre a perda de toda a loja.');
+  ler('Açougue, Frios e Pães perdem muito mais que os outros e "esmagariam" este gráfico. Aqui eles ficam de fora para que os setores menores possam ser comparados entre si. A porcentagem no fim da barra continua sendo sobre a perda de toda a loja.');
 
 export function secSeg(c, mix, withKpis = true) {
   const rr = c.rows.filter(x => x.mix === mix), segs = mix === 'Açougue e Peixaria' ? AC_SEGS : FR_SEGS;
@@ -141,7 +141,7 @@ export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u></h2>${tblTi
 export function secRepetidos(c) {
   const both = c.cons.filter(a => a.ven > 0 && a.ava > 0).slice(0, 15);
   const freq = c.cons.filter(a => a.n >= 3).sort((a, b) => b.tot - a.tot).slice(0, 15);
-  return '<h2>Venceram E estragaram no mesmo mês</h2>' + (both.length ? tblItems(both) : '<div class="small">Nenhum.</div>') +
+  return '<h2>Venceram e também estragaram no mesmo mês</h2>' + (both.length ? tblItems(both) : '<div class="small">Nenhum.</div>') +
     ler('produto que aparece nos dois lados pode estar sendo pedido demais (vence) e também mal armazenado ou manuseado (estraga).') +
     '<h2>Recolhidos 3 vezes ou mais — do que mais perdeu para o que menos perdeu</h2>' + (freq.length ? tblItems(freq) : '<div class="small">Nenhum.</div>') +
     ler('"Vezes" é quantas vezes o produto foi recolhido. Produto que volta sempre é candidato a reduzir pedido ou mudar a exposição.');
@@ -170,10 +170,10 @@ export function secVenda(c) {
 export function secVendaTabela(c) {
   if (!c.vendas) return '';
   const k = kpiVenda(c.rows, c.vendas);
-  let h = `<h2>Tabela de perda x venda — ${esc(c.vendas.periodo)}</h2><table><tr><th>Setor</th><th class="n">Vendemos</th><th class="n">Lucro bruto</th><th class="n">Perdemos</th><th class="n">De cada R$ 100<br>vendidos, perdemos</th><th class="n">Meta</th><th>Sinal</th><th class="n">A perda "comeu"<br>do lucro</th></tr>`;
+  let h = `<h2>Tabela de perda x venda — ${esc(c.vendas.periodo)}</h2><table><tr><th>Setor</th><th class="n">Vendemos</th><th class="n">Lucro bruto</th><th class="n">Perdemos</th><th class="n">De cada R$ 100<br>vendidos, perdemos</th><th class="n">Meta</th><th>Sinal</th><th class="n">Lucro consumido<br>pela perda<br>do lucro</th></tr>`;
   for (const l of [...k.linhas].sort((a, b) => b.idx - a.idx)) h += `<tr><td><b>${l.nome}</b></td><td class="n">${brl(l.v, 0)}</td><td class="n">${brl(l.lb, 0)}</td><td class="n">${brl(l.p, 0)}</td><td class="n"><b>R$ ${num(l.idx * 100, 2)}</b></td><td class="n">R$ ${num(l.meta * 100, 2)}</td><td><span class="sem" style="background:${l.st[0]}"></span>${l.st[1]}</td><td class="n"><b>${pct(l.lb ? l.p / l.lb : 0)}</b></td></tr>`;
   return h + `<tr class="tot"><td>LOJA (todos os setores)</td><td class="n">${brl(k.vt, 0)}</td><td class="n">${brl(k.lt, 0)}</td><td class="n">${brl(k.pt, 0)}</td><td class="n">R$ ${num(k.pt / k.vt * 100, 2)}</td><td class="n">R$ ${num(MEDIA_LOJA * QUEBRA, 2)}</td><td></td><td class="n">${pct(k.pt / k.lt)}</td></tr></table>` +
-    ler('"Lucro bruto" é o que sobra da venda depois de pagar o produto. "A perda comeu do lucro" mostra quanto desse lucro foi embora com a perda. Vendas e lucro: relatório Rentabilidade de Vendas do sistema; perda a preço de custo.');
+    ler('"Lucro bruto" é o que sobra da venda depois de pagar o produto. "Lucro consumido pela perda" mostra quanto desse lucro foi embora com a perda. Vendas e lucro: relatório Rentabilidade de Vendas do sistema; perda a preço de custo.');
 }
 
 export function secMetas() {
@@ -185,8 +185,9 @@ export function secMetas() {
 
 // --------- documento para impressão / PDF ---------
 const header = (t, sub, tag) => `<div class="hd"><img src="img/logo.png?v=2"><div><h1>§§${esc(t)}§§</h1><div class="sub">${esc(sub)}</div></div><div class="tag">${tag}</div></div>`;
+const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
 const DESC = {
-  'Fechamento de Perdas': 'quanto a loja perdeu, quanto venceu e quanto estragou, e o que fazer primeiro',
+  'Resumo do mês': 'quanto a loja perdeu, quanto venceu e quanto estragou, e o que fazer primeiro',
   'Onde perdemos mais': 'ranking dos 12 setores que mais perderam', 'Onde perdemos mais no ano': 'ranking dos setores que mais perderam no ano',
   'Todos os setores': 'tabela completa, do setor que mais perdeu ao que menos perdeu', 'Todos os setores no ano': 'tabela completa do ano, do setor que mais perdeu ao que menos perdeu',
   'Setores menores': 'os demais setores comparados entre si (sem Açougue, Frios e Pães)',
@@ -200,6 +201,9 @@ const DESC = {
   'Perdas do ano': 'total do ano, média por mês e o ranking dos meses', 'Mês a mês': 'evolução, tabela de cada mês com total e média, e o que fazer',
   'Setores mês a mês': 'cada setor em cada mês, em mil reais', 'Gerentes e encarregados': 'quanto cada responsável perdeu no ano',
   'O que fazer agora': 'os produtos para atacar primeiro e o tipo de ação',
+  'Resumo': 'quanto o setor perdeu, quanto venceu e quanto estragou, e o peso dele na loja',
+  'Lista completa — produtos por quilo (kg)': 'todos os produtos pesados na balança com perda no mês, do maior para o menor',
+  'Lista completa — produtos por unidade (un)': 'todos os produtos contados um a um com perda no mês, do maior para o menor',
   'Como ler este relatório': 'o significado das cores, dos símbolos e das palavras usadas',
 };
 function doc(pages, label, title, capa = {}) {
@@ -211,7 +215,7 @@ function doc(pages, label, title, capa = {}) {
   }));
   const sum = `<div class="hd"><img src="img/logo.png?v=2"><div><h1>${esc(capa.titulo || title)}</h1><div class="sub">${esc(capa.sub || label)}</div></div><div class="tag">${capa.tag || ''}</div></div>
     <h2 style="font-size:16px;margin-top:4mm">Sumário</h2><table class="sumario"><tr><th style="width:9%">Nº</th><th>Parte</th><th>O que mostra</th><th class="n" style="width:11%">Página</th></tr>
-    ${secs.map((s, i) => `<tr><td><b>${i + 1}</b></td><td><b>${s.t}</b></td><td>${DESC[s.t.replace(/^Perdas do ano \d+$/, 'Perdas do ano')] || DESC[s.t.split(' · ')[0]] || ''}</td><td class="n"><b>${s.pg}</b></td></tr>`).join('')}</table>
+    ${secs.map((s, i) => `<tr><td><b>${i + 1}</b></td><td><b>${s.t}</b></td><td>${cap(DESC[s.t.replace(/^Perdas do ano \d+$/, 'Perdas do ano')] || DESC[s.t.split(' · ')[0]] || '')}</td><td class="n"><b>${s.pg}</b></td></tr>`).join('')}</table>
     <div class="ler"><b>Como usar:</b> cada parte do relatório tem um número (ele aparece no título de cada página). Em todos os gráficos e tabelas, a ordem é sempre <b>do que mais perdeu para o que menos perdeu</b> — só a evolução no tempo segue a ordem do calendário. Embaixo de cada gráfico e tabela há um quadro <b>"Como ler"</b>, e a última parte explica todas as cores e palavras.</div>
     ${secLegenda()}`;
   pages = [sum, ...pages];
@@ -224,7 +228,7 @@ const today = () => new Date().toLocaleDateString('pt-BR');
 export function reportGeral(c) {
   const tag = `FECHAMENTO DE PERDAS<br><span>Gerado em ${today()}</span>`, sub = `${c.label} · ${LOJA.nome}`;
   const P = [];
-  P.push(header('Fechamento de Perdas', sub, tag) + secResumo(c) + secAcoes(c));
+  P.push(header('Resumo do mês', sub, tag) + secResumo(c) + secAcoes(c));
   P.push(header('Onde perdemos mais', sub, tag) + secRanking(c));
   P.push(header('Todos os setores', sub, tag) + secTabela(c));
   P.push(header('Setores menores', sub, tag) + secDemais(c));
@@ -336,7 +340,7 @@ export function secAnoMeses(c) {
   const n = ks.length;
   h += `<tr class="tot"><td>TOTAL DO ANO</td><td class="n">${brl(tv)}</td><td class="n">${brl(ta)}</td><td class="n">${brl(tv + ta)}</td><td class="n">${vv ? brl(vv, 0) : '-'}</td><td class="n">${vv ? 'R$ ' + num(pv / vv * 100, 2) : '-'}</td><td></td><td></td></tr>
     <tr class="tot" style="background:#2a2a2a"><td>MÉDIA POR MÊS</td><td class="n">${brl(tv / n)}</td><td class="n">${brl(ta / n)}</td><td class="n">${brl((tv + ta) / n)}</td><td class="n">${vv ? brl(vv / c.comV.length, 0) : '-'}</td><td class="n">${vv ? 'R$ ' + num(pv / vv * 100, 2) : '-'}</td><td></td><td></td></tr></table>`;
-  return h + ler(`cada linha é um mês. <b>De cada R$ 100 vendidos</b> mostra quantos reais viraram perda para cada R$ 100 que a loja vendeu naquele mês (meta da loja: até R$ ${num(meta * 100, 2)}). <b>Sinal</b>: verde = dentro da meta, amarelo = um pouco acima, vermelho = acima. <b>Comparado ao mês anterior</b>: ▲ vermelho = a perda subiu, ▼ verde = a perda caiu. A <b>média por mês</b> é o total do ano dividido pelos meses com dados.`);
+  return h + ler(`cada linha é um mês. A coluna <b>De cada R$ 100 vendidos</b> mostra quantos reais viraram perda a cada R$ 100 que a loja vendeu naquele mês (meta da loja: até R$ ${num(meta * 100, 2)}). <b>Sinal</b>: verde = dentro da meta, amarelo = um pouco acima, vermelho = acima. <b>Comparado ao mês anterior</b>: ▲ vermelho = a perda subiu, ▼ verde = a perda caiu. A <b>média por mês</b> é o total do ano dividido pelos meses com dados.`);
 }
 
 export function secAnoSetorMes(c) {
@@ -362,7 +366,7 @@ export function secAnoProdutosMeses(c) {
   let h = `<h2>Produtos que deram perda em quase todos os meses</h2><table><tr><th>#</th><th>Produto</th><th>Setor</th><th class="n">Meses com perda</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total no ano</th></tr>`;
   lst.forEach((a, i) => h += `<tr><td>${i + 1}</td><td>${esc(a.desc)} ${u(a.unit)}</td><td>${esc(a.mix)}</td><td class="n"><b>${a.nm} de ${c.ks.length}</b></td><td class="n">${a.ven ? brl(a.ven) : '-'}</td><td class="n">${a.ava ? brl(a.ava) : '-'}</td><td class="n"><b>${brl(a.tot)}</b></td></tr>`);
   if (!lst.length) h += '<tr><td colspan="7" class="small">Nenhum produto se repetiu na maioria dos meses.</td></tr>';
-  return h + '</table>' + ler('são produtos que deram perda mês após mês. Não é azar: é sinal de que o pedido, a exposição ou o cuidado com esse produto precisa mudar de vez.');
+  return h + '</table>' + ler('são produtos que deram perda mês após mês. Não é azar: é sinal de que o pedido, a exposição ou o cuidado com esse produto precisam mudar de vez.');
 }
 
 export function reportAnual(A) {
