@@ -25,8 +25,8 @@ function sheet(title, sub, cols, rows, fmts, totCols, after = []) {
 
 const GUIA = [
   ['O QUE É CADA ABA', ''],
-  ['PRODUTOS POR KG', 'Produtos vendidos por quilo (pesados na balança), somados no mês, do que mais perdeu para o que menos perdeu.'],
-  ['PRODUTOS POR UNIDADE', 'Produtos vendidos por unidade (contados um a um), somados no mês, do que mais perdeu para o que menos perdeu.'],
+  ['PRODUTOS POR KG', 'Produtos de quilo (pesados na balança), somados no mês, do que mais perdeu para o que menos perdeu.'],
+  ['PRODUTOS POR UNIDADE', 'Produtos de unidade (contados um a um), somados no mês, do que mais perdeu para o que menos perdeu.'],
   ['REGISTROS', 'Cada lançamento de perda, com a data, o tipo (vencido ou avariado), o setor, o encarregado e o gerente.'],
   ['', ''],
   ['O QUE SIGNIFICA CADA COLUNA', ''],
