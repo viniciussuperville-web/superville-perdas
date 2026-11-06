@@ -136,7 +136,7 @@ export function secTop(c) {
 export const lerUnit = unit => ler(unit === 'kg'
   ? 'aqui estão só os produtos <b>vendidos por quilo</b> (pesados na balança, como carnes, frios fatiados e queijos). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em quilos; <b>Valor</b> é o custo em reais.'
   : 'aqui estão só os produtos <b>vendidos por unidade</b> (contados um a um, como iogurtes, bebidas e pacotes). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em unidades; <b>Valor</b> é o custo em reais.');
-export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u></h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}${lerUnit(unit)}`;
+export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u> (passaram da validade)</h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}${lerUnit(unit)}`;
 
 export function secRepetidos(c) {
   const both = c.cons.filter(a => a.ven > 0 && a.ava > 0).slice(0, 15);
@@ -194,7 +194,7 @@ const DESC = {
   'Açougue e Peixaria': 'aberto por tipo de produto, com quilos e R$ por kg', 'Frios e Laticínios': 'aberto por tipo de produto, com quilos e R$ por kg',
   'Perda dia a dia': 'a perda de cada dia e os dias da semana que mais perdem',
   'Produtos que mais deram perda': 'os 20 maiores e quantos produtos fazem 80% da perda', 'Produtos que mais deram perda no ano': 'os 20 maiores do ano e quantos fazem 80% da perda',
-  'Produtos vendidos por quilo (kg)': 'os que mais venceram e os que mais estragaram, pesados na balança', 'Produtos vendidos por unidade (un)': 'os que mais venceram e os que mais estragaram, contados um a um',
+  'Produtos vendidos por quilo (kg)': 'os que mais passaram da validade e os que mais estragaram, pesados na balança', 'Produtos vendidos por unidade (un)': 'os que mais passaram da validade e os que mais estragaram, contados um a um',
   'Produtos que se repetem': 'os que venceram e estragaram no mesmo mês e os recolhidos muitas vezes', 'Produtos que se repetem todo mês': 'os que deram perda em quase todos os meses',
   'Perda x Venda': 'de cada R$ 100 vendidos, quanto cada setor perdeu, com o sinal da meta', 'Perda x Venda no ano': 'de cada R$ 100 vendidos no ano, quanto cada setor perdeu',
   'Perda x Venda e metas': 'tabela de venda, lucro, perda e meta de cada setor', 'Metas': 'o máximo de perda aceitável para cada setor',
@@ -264,7 +264,7 @@ export function reportSetor(c, key, val, titulo) {
   P.push(header('O que fazer agora', `${c.label} · ${titulo}`, tag) + secAcoes(c, rr));
   for (const [unit, nome] of [['kg', 'por quilo (kg)'], ['un', 'por unidade (un)']]) {
     if (!cs.cons.some(a => a.unit === unit)) continue;
-    P.push(header(`Produtos vendidos ${nome}`, `${c.label} · ${titulo}`, tag) + `<h2>Os que mais venceram — ${nome}</h2>${tblTipo(cs.cons, 'ven', unit, 10)}<h2>Os que mais estragaram — ${nome}</h2>${tblTipo(cs.cons, 'ava', unit, 10)}${lerUnit(unit)}`);
+    P.push(header(`Produtos vendidos ${nome}`, `${c.label} · ${titulo}`, tag) + `<h2>Os que mais venceram (passaram da validade) — ${nome}</h2>${tblTipo(cs.cons, 'ven', unit, 10)}<h2>Os que mais estragaram — ${nome}</h2>${tblTipo(cs.cons, 'ava', unit, 10)}${lerUnit(unit)}`);
   }
   const CH = 30;
   for (const [unit, nome] of [['kg', 'por quilo (kg)'], ['un', 'por unidade (un)']]) {
