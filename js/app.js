@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '21';
+export const APP_V = '22';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -52,9 +52,17 @@ function renderLogin(err = '') {
     <div class="muted">Entre com seu e-mail e senha.</div>
     <label class="field">E-mail<input type="email" id="le" required autocomplete="username"></label>
     <label class="field">Senha<input type="password" id="lp" required autocomplete="current-password"></label>
-    <button class="btn" type="submit">Entrar</button>${err ? `<div class="msg err">${esc(err)}</div>` : ''}</form></div>`;
+    <button class="btn" type="submit">Entrar</button>
+    <a href="#" id="esq" style="text-align:center;font-size:12.5px;color:#1E7B46;font-weight:700">Esqueci minha senha</a>
+    <div id="lmsg">${err ? `<div class="msg err">${esc(err)}</div>` : ''}</div></form></div>`;
   $('#lf').onsubmit = async e => { e.preventDefault();
-    try { await auth.signInWithEmailAndPassword($('#le').value.trim(), $('#lp').value); } catch (x) { renderLogin('E-mail ou senha incorretos.'); } };
+    try { await auth.signInWithEmailAndPassword($('#le').value.trim(), $('#lp').value); } catch (x) { renderLogin('E-mail ou senha incorretos. Se esqueceu a senha, clique em "Esqueci minha senha".'); } };
+  $('#esq').onclick = async e => { e.preventDefault();
+    const em = $('#le').value.trim(), out = $('#lmsg');
+    if (!em) { out.innerHTML = '<div class="msg info">Digite seu <b>e-mail</b> no campo acima e clique de novo em "Esqueci minha senha".</div>'; $('#le').focus(); return; }
+    try { auth.languageCode = 'pt-BR'; await auth.sendPasswordResetEmail(em);
+      out.innerHTML = `<div class="msg ok">✔ Enviamos um e-mail para <b>${esc(em)}</b> com o link para criar uma senha nova. Veja a caixa de entrada e também o <b>spam</b>. Depois de criar a senha, volte aqui e entre.</div>`;
+    } catch (x) { out.innerHTML = `<div class="msg err">${/user-not-found/.test(x.code || '') ? 'Este e-mail não tem acesso ao site. Fale com o administrador.' : /invalid-email/.test(x.code || '') ? 'E-mail inválido. Confira o que foi digitado.' : /too-many/.test(x.code || '') ? 'Muitas tentativas. Espere alguns minutos e tente de novo.' : 'Não foi possível enviar agora. Tente de novo em instantes.'}</div>`; } };
 }
 
 async function loadConfig() {
