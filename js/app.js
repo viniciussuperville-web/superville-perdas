@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '25';
+export const APP_V = '26';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -40,21 +40,23 @@ const anoFechado = ano => anosFechados[ano]?.fechado;
 // ---------------- autenticação ----------------
 auth.onAuthStateChanged(async u => {
   state.user = u;
-  if (!u) return renderLogin();
-  await loadCatalog();
-  await loadConfig();
-  state.mes = state.mes || mesAtual();
-  renderShell(); await loadMes();
+  if (!u) { renderLogin(); window.SVPadrao?.pronto(); return; }
+  try {
+    await loadCatalog();
+    await loadConfig();
+    state.mes = state.mes || mesAtual();
+    renderShell(); await loadMes();
+  } finally { window.SVPadrao?.pronto(); }
 });
 
 function renderLogin(err = '') {
-  app.innerHTML = `<div class="login"><div class="h"><img src="img/logo.png?v=2"><div><b>Gestão de Perdas</b><span>Padrão SuperVille</span></div></div><form id="lf">
-    <div class="muted">Entre com seu e-mail e senha.</div>
+  app.innerHTML = `<div class="sv-login-fundo" style="min-height:100vh;padding:1px 16px"><div class="sv-login"><div class="sv-login-head"><img src="sv-padrao/logo.png" alt="SuperVille Supermercado"><b>Gestão de Perdas</b><small>Vencidos e avarias das lojas</small></div><form id="lf" class="sv-login-body">
+    <p class="sv-aviso">Entre com seu e-mail e senha.</p>
     <label class="field">E-mail<input type="email" id="le" required autocomplete="username"></label>
     <label class="field">Senha<input type="password" id="lp" required autocomplete="current-password"></label>
     <button class="btn" type="submit">Entrar</button>
-    <a href="#" id="esq" style="text-align:center;font-size:12.5px;color:#1E7B46;font-weight:700">Esqueci minha senha</a>
-    <div id="lmsg">${err ? `<div class="msg err">${esc(err)}</div>` : ''}</div></form></div>`;
+    <a href="#" id="esq" style="display:block;margin-top:12px;text-align:center;font-size:12.5px;color:#1E7B46;font-weight:700">Esqueci minha senha</a>
+    <div id="lmsg" style="margin-top:10px">${err ? `<div class="msg err">${esc(err)}</div>` : ''}</div></form></div></div>`;
   $('#lf').onsubmit = async e => { e.preventDefault();
     try { await auth.signInWithEmailAndPassword($('#le').value.trim(), $('#lp').value); } catch (x) { renderLogin('E-mail ou senha incorretos. Se esqueceu a senha, clique em "Esqueci minha senha".'); } };
   $('#esq').onclick = async e => { e.preventDefault();
