@@ -39,7 +39,8 @@ export function donut(parts, center, size = 220) {
   for (const [nome, v, cor] of parts) {
     const a1 = a0 + v / tot * Math.PI * 2, large = a1 - a0 > Math.PI ? 1 : 0;
     const P = (rr, a) => `${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)}`;
-    if (v > 0) s += `<path d="M${P(r, a0)} A${r},${r} 0 ${large} 1 ${P(r, a1)} L${P(r0, a1)} A${r0},${r0} 0 ${large} 0 ${P(r0, a0)} Z" fill="${cor}" stroke="#fff" stroke-width="2"/>`;
+    if (v / tot > 0.9999) s += `<circle cx="${cx}" cy="${cy}" r="${(r + r0) / 2}" fill="none" stroke="${cor}" stroke-width="${r - r0}"/>`;
+    else if (v > 0) s += `<path d="M${P(r, a0)} A${r},${r} 0 ${large} 1 ${P(r, a1)} L${P(r0, a1)} A${r0},${r0} 0 ${large} 0 ${P(r0, a0)} Z" fill="${cor}" stroke="#fff" stroke-width="2"/>`;
     const am = (a0 + a1) / 2;
     if (v / tot > 0.06) s += `<text x="${cx + 76 * Math.cos(am)}" y="${cy + 76 * Math.sin(am) + 4}" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">${pct(v / tot, 0)}</text>`;
     a0 = a1;

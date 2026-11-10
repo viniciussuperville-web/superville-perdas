@@ -1,5 +1,5 @@
 @import url(base.css?v=2);
-body{background:#EEF1EF;font-size:13px}
+body{background:#F4F5F4;font-size:13px}
 .top{background:var(--black);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 20px;border-bottom:4px solid var(--green);position:sticky;top:0;z-index:20}
 .top img{height:38px} .top h1{font-size:17px;margin:0;font-weight:800} .top .sub{font-size:11px;color:#bbb}
 .top .sp{flex:1} .top select,.top button{font-family:inherit}
@@ -11,7 +11,7 @@ nav{display:flex;gap:4px;padding:0 20px;background:#fff;border-bottom:1px solid 
 nav a{padding:12px 14px;font-weight:700;color:#595959;text-decoration:none;border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer}
 nav a.on{color:#111;border-bottom-color:var(--green)}
 main{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
-.card{background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card{background:#fff;border:1px solid #DDE1DF;border-radius:10px;padding:14px 16px;margin-bottom:14px;min-width:0}
 .card>h2:first-child{margin-top:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
 .drop{border:2px dashed #b9c9bf;border-radius:12px;padding:22px;text-align:center;background:#F7FBF8;cursor:pointer}
@@ -42,3 +42,20 @@ main{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
 .cal-d.hoje{outline:3px solid #111}
 .cal-leg{margin-top:8px;line-height:2} .cal-leg .cal-d{display:inline-block;min-height:0;width:14px;height:14px;padding:0;vertical-align:middle;margin:0 2px 0 8px}
 @media(max-width:800px){.toast{left:12px;right:12px;bottom:12px}}
+
+/* barra de filtro no padrão da Gestão de Desempenho */
+.fbar{background:#fff;border:1px solid #DDE1DF;border-radius:10px;padding:12px 14px;margin-bottom:14px;position:sticky;top:104px;z-index:10}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.chips button{font:inherit;font-size:12.5px;border:1px solid #DDE1DF;background:#fff;color:#16191A;border-radius:8px;padding:5px 10px;cursor:pointer}
+.chips button.on{background:#0B0B0B;color:#fff;border-color:#0B0B0B}
+.chips button:disabled{opacity:.35;cursor:default}
+.badge{display:inline-block;border-radius:99px;padding:3px 11px;font-size:11.5px;background:#E9EEEB;color:#4A5250;font-weight:700}
+.badge.ok{background:#E3F4EA;color:#1E7B46}
+.card .sub{color:#7C8582;font-size:12px;margin:-4px 0 10px}
+.pieRow{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:18px;align-items:center}
+.pieRow svg{width:100%;height:auto}
+.leg{display:flex;flex-direction:column;gap:5px;font-size:12.5px}
+.leg div{display:flex;align-items:center;gap:8px}
+.leg i{width:14px;height:14px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.leg em{font-style:normal;color:#7C8582;margin-left:auto;padding-left:8px;white-space:nowrap}
+@media(max-width:620px){.pieRow{grid-template-columns:minmax(0,1fr)}.fbar{position:static}}

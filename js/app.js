@@ -1,9 +1,9 @@
 // SuperVille · Gestão de Perdas — aplicação
 import { firebaseConfig, LOJA, MESES, ADMINS } from './config.js';
-import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda } from './core.js';
+import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda, OCULTO, setOculto } from './core.js';
 import { parseTrocas, parseVendas } from './parse.js';
 import * as R from './report.js';
-import { columns, hbar } from './charts.js';
+import { columns, hbar, donut } from './charts.js';
 import { exportExcel } from './excel.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
@@ -14,12 +14,12 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '26';
+export const APP_V = '27';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
     const { v } = await r.json();
-    if (v && v !== APP_V && !document.querySelector('.drop.on') && !location.search.includes('v=' + v)) location.replace(location.pathname + '?v=' + v);
+    if (v && v !== APP_V && !document.querySelector('.drop.on') && !location.search.includes('v=' + v)) { const u = new URL(location.href); u.searchParams.set('v', v); location.replace(u); }
   } catch (e) { /* sem conexão: tenta de novo depois */ }
 }
 setInterval(checkVersion, 60000);
@@ -44,7 +44,11 @@ auth.onAuthStateChanged(async u => {
   try {
     await loadCatalog();
     await loadConfig();
-    state.mes = state.mes || mesAtual();
+    try { const q = new URLSearchParams(location.search);
+    if (/^\d{4}-\d{2}$/.test(q.get('mes') || '') && q.get('mes') <= mesAtual()) state.mes = q.get('mes');
+    if (TABS.some(([k]) => k === q.get('tab'))) state.tab = q.get('tab');
+    if (q.get('setor')) state.setor = q.get('setor'); } catch (e) {}
+  state.mes = state.mes || mesAtual();
     renderShell(); await loadMes();
   } finally { window.SVPadrao?.pronto(); }
 });
@@ -82,9 +86,9 @@ function renderShell() {
     <select id="mes">${[...new Set(mesesOpcoes().map(m => m.slice(0, 4)))].map(y => `<optgroup label="${y}${anoFechado(y) ? ' · ano fechado' : ''}">${mesesOpcoes().filter(m => m.startsWith(y)).map(m => `<option value="${m}" ${m === state.mes ? 'selected' : ''}>${mesLabel(m)}</option>`).join('')}</optgroup>`).join('')}</select>
     <button class="btn sec" id="sair">Sair</button></div>
     <nav>${TABS.filter(([k]) => isAdmin() || TABS_COLAB.includes(k)).map(([k, l]) => `<a data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}</a>`).join('')}</nav><main id="main"></main>`;
-  $('#mes').onchange = async e => { state.mes = e.target.value; await loadMes(); };
+  $('#mes').onchange = async e => { state.mes = e.target.value; state.setor = ''; syncURL(); await loadMes(); };
   $('#sair').onclick = () => auth.signOut();
-  document.querySelectorAll('nav a').forEach(a => a.onclick = () => { state.tab = a.dataset.t; document.querySelectorAll('nav a').forEach(b => b.classList.toggle('on', b === a)); render(); });
+  document.querySelectorAll('nav a').forEach(a => a.onclick = () => { state.tab = a.dataset.t; document.querySelectorAll('nav a').forEach(b => b.classList.toggle('on', b === a)); syncURL(); render(); });
 }
 
 async function loadMes() {
@@ -93,6 +97,7 @@ async function loadMes() {
   state.imports = q.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.loja === LOJA.id).sort((a, b) => a.data.localeCompare(b.data) || a.tipo.localeCompare(b.tipo));
   const v = await db.collection('vendas').doc(`${LOJA.id}_${state.mes}`).get();
   state.vendas = v.exists ? v.data() : null;
+  try { const f = await db.collection('config').doc('fechamentos').get(); state.fechados = f.exists ? f.data().map || {} : {}; } catch (e) { state.fechados = {}; }
   state.rows = state.imports.flatMap(imp => (imp.items || []).map(it => classify(it, imp)));
   render();
 }
@@ -104,11 +109,53 @@ function render() {
 }
 
 // ---------------- painel ----------------
+const PAL = ['#3BB072', '#111111', '#2E7DAF', '#F2B705', '#D64545', '#8E6CC9', '#E07B39', '#8B5E3C', '#1E7B46', '#5B6B66', '#B9C9BF'];
+const MCURTO = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+function syncURL() { try { const u = new URL(location.href); u.searchParams.set('mes', state.mes); u.searchParams.set('tab', state.tab); state.setor ? u.searchParams.set('setor', state.setor) : u.searchParams.delete('setor'); history.replaceState(null, '', u); } catch (e) {} }
+function filtroBar() {
+  const y = state.mes.slice(0, 4), setores = R.ctxOf(state.rows, state.mes, null).bymix.map(([k]) => k).filter(k => k !== 'A CLASSIFICAR');
+  const fech = state.fechados?.[state.mes] || state.imports.some(i => i.ajuste);
+  return `<div class="fbar"><div class="chips">${[...Array(12)].map((_, i) => { const k = `${y}-${String(i + 1).padStart(2, '0')}`, fut = k > mesAtual();
+      return `<button data-fm="${k}" class="${k === state.mes ? 'on' : ''}" ${fut ? 'disabled' : ''}>${MCURTO[i + 1]}/${y.slice(2)}</button>`; }).join('')}</div>
+    <div class="flex"><label class="field" style="min-width:240px">Setor<select id="fsetor"><option value="">Todos os setores</option>${setores.map(k => `<option ${k === state.setor ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
+    <span class="badge ${fech ? 'ok' : ''}">${fech ? '✔ Mês fechado (bate com o sistema)' : state.rows.length ? 'Mês em andamento' : 'Sem dados'}</span>
+    <div style="flex:1"></div><button class="btn out" id="focult">${OCULTO ? '👁 Mostrar valores' : '🙈 Ocultar valores'}</button></div></div>`;
+}
+function bindFiltro() {
+  document.querySelectorAll('[data-fm]').forEach(b => b.onclick = async () => { state.mes = b.dataset.fm; state.setor = ''; syncURL(); renderShellTabs(); await loadMes(); });
+  const fs = $('#fsetor'); if (fs) fs.onchange = () => { state.setor = fs.value; syncURL(); render(); };
+  const fo = $('#focult'); if (fo) fo.onclick = () => { setOculto(!OCULTO); render(); };
+}
+function pizza(itens, tot, titulo) {
+  const top = itens.slice(0, 9), resto = itens.slice(9).reduce((s, [, a]) => s + a.tot, 0);
+  const parts = top.map(([k, a], i) => [k, a.tot, PAL[i]]); if (resto > 0) parts.push(['Demais', resto, PAL[10]]);
+  return `<div class="pieRow"><div>${donut(parts, [OCULTO ? '100%' : brl(tot, 0), titulo])}</div><div class="leg">${parts.map(([k, v, c]) => `<div><i style="background:${c}"></i>${esc(k)}<em>${pct(v / tot)}${OCULTO ? '' : ' · ' + brl(v, 0)}</em></div>`).join('')}</div></div>`;
+}
 function painel(m) {
-  if (!state.rows.length) { m.innerHTML = `<div class="card empty"><b>Nenhuma perda importada em ${mesLabel(state.mes)}.</b><br><br>Vá na aba <b>Importar</b> e envie os relatórios de vencidos e avariados.</div>`; return; }
+  syncURL();
+  if (!state.rows.length) { m.innerHTML = filtroBar() + `<div class="card empty"><b>Nenhuma perda importada em ${mesLabel(state.mes)}.</b><br><br>Vá na aba <b>Importar</b> e envie os relatórios de vencidos e avariados.</div>`; bindFiltro(); return; }
   const c = R.ctxOf(state.rows, state.mes, state.vendas);
   const dias = new Set(state.rows.filter(x => x.origem !== 'Ajuste do fechamento').map(x => x.data)).size;
-  m.innerHTML = `${intro('Painel: o resumo do mês escolhido no topo. Atualiza na hora a cada relatório enviado. Para trocar de mês, use a lista no canto de cima.')}<div class="card"><div class="flex"><h2 style="margin:0">Resumo de ${mesLabel(state.mes)}</h2><span class="muted">${dias} dia(s) importado(s) · ${state.vendas ? 'vendas importadas ✔' : 'vendas do mês ainda não importadas'}</span></div>${R.secResumo(c)}</div>
+  if (state.setor && !c.bymix.some(([k]) => k === state.setor)) state.setor = '';
+  if (state.setor) {
+    const rr = state.rows.filter(x => x.mix === state.setor), cs = R.ctxOf(rr, state.mes, null), info = mixInfo(state.setor);
+    const posi = c.bymix.findIndex(([k]) => k === state.setor) + 1;
+    m.innerHTML = filtroBar() + `<div class="card"><h2 style="margin-top:0">${esc(state.setor)} · ${mesLabel(state.mes)}</h2><div class="sub">Encarregado: <b>${esc(info.enc || '—')}</b> · Gerente: <b>${esc(info.ger || '—')}</b> · ${posi}º setor que mais perdeu na loja</div>
+      <div class="kpis">${[['Perda do setor', brl(cs.tot, 0), `${pct(cs.tot / c.tot)} de toda a perda da loja`, 'red'], ['Vencido', brl(cs.ven, 0), `${pct(cs.ven / (cs.tot || 1))} do setor`, 'dark'], ['Avariado', brl(cs.ava, 0), `${pct(cs.ava / (cs.tot || 1))} do setor`, ''], ['Por quilo', num(cs.kg) + ' kg', 'produtos pesados', ''], ['Por unidade', num(cs.un) + ' un', 'produtos contados', 'dark']]
+        .map(([l, v, s2, k]) => `<div class="kpi ${k}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s2}</div></div>`).join('')}</div></div>
+      <div class="grid2"><div class="card">${(() => { const sg = Object.entries(rr.reduce((o, x) => { const a = o[x.seg || 'Outros'] ||= { tot: 0 }; a.tot += x.valor; return o; }, {})).sort((a, b) => b[1].tot - a[1].tot);
+        return sg.length > 1 ? `<h2>Por tipo de produto</h2>${pizza(sg, cs.tot, 'perda do setor')}${R.ler('cada fatia é um tipo de produto do setor, do que mais perdeu para o que menos perdeu.')}`
+          : `<h2>Produtos que mais pesaram</h2>${pizza(cs.cons.map(a => [a.desc, a]), cs.tot, 'perda do setor')}${R.ler('cada fatia é um produto, do que mais perdeu para o que menos perdeu. "Demais" junta todos os outros produtos do setor.')}`; })()}</div>
+      <div class="card"><h2>Vencido x avariado</h2>${pizza([['Vencido', { tot: cs.ven }], ['Avariado', { tot: cs.ava }]].sort((a, b) => b[1].tot - a[1].tot), cs.tot, 'perda do setor')}${R.ler('quanto da perda do setor passou da validade (vencido) e quanto estragou (avariado).')}</div></div>
+      <div class="card">${R.secAcoes(cs, rr)}</div>
+      <div class="card"><h2>Produtos que mais deram perda</h2>${R.secTop(cs)}</div>
+      <div class="grid2"><div class="card"><h2>Produtos por quilo (kg)</h2>${R.secUnit(cs, 'kg')}</div><div class="card"><h2>Produtos por unidade (un)</h2>${R.secUnit(cs, 'un')}</div></div>
+      <div class="card"><h2>Produtos que se repetem</h2>${R.secRepetidos(cs)}</div>`;
+    bindFiltro(); return;
+  }
+  m.innerHTML = filtroBar() + `<div class="card"><div class="flex"><h2 style="margin:0">Resumo de ${mesLabel(state.mes)}</h2><span class="muted">${dias} dia(s) importado(s) · ${state.vendas ? 'vendas importadas ✔' : 'vendas do mês ainda não importadas'}</span></div>${R.secResumo(c)}</div>
+    <div class="grid2"><div class="card"><h2>Participação por setor</h2>${pizza(c.bymix, c.tot, 'perda do mês')}${R.ler('cada fatia é um setor, do que mais perdeu para o que menos perdeu. Escolha um setor no filtro acima para ver só ele.')}</div>
+    <div class="card"><h2>Por gerente</h2>${pizza(c.byger, c.tot, 'perda do mês')}${R.ler('quanto da perda ficou com os setores de cada gerente.')}</div></div>
     <div class="card">${R.secRanking(c)}</div>
     <div class="card">${R.secVenda(c)}${R.secVendaTabela(c)}</div>
     ${dias > 1 ? `<div class="card">${R.secEvolucao(c)}</div>` : ''}
@@ -117,6 +164,7 @@ function painel(m) {
     <div class="card"><h2>Produtos que mais deram perda</h2>${R.secTop(c)}</div>
     <div class="grid2"><div class="card"><h2>Produtos por quilo (kg)</h2>${R.secUnit(c, 'kg')}</div><div class="card"><h2>Produtos por unidade (un)</h2>${R.secUnit(c, 'un')}</div></div>
     <div class="card"><h2>Produtos que se repetem</h2>${R.secRepetidos(c)}</div><div class="card">${R.secMetas()}</div>`;
+  bindFiltro();
 }
 
 // ---------------- importar ----------------
@@ -237,7 +285,8 @@ async function aplicarFech() {
     }
     const S = await sitePorProduto(F.mes);
     const fim = t => r2(S.tot[t] + (S.ajuste[t]?.total || 0));
-    msg('#fres', 'ok', `✔ Ajuste lançado. ${mesLabel(F.mes)} no site agora: vencidos ${brl(fim('VENCIDO'))}${F.VENCIDO ? ` (sistema ${brl(F.VENCIDO.total)})` : ''} · avariados ${brl(fim('AVARIADO'))}${F.AVARIADO ? ` (sistema ${brl(F.AVARIADO.total)})` : ''}.`);
+    try { await db.collection('config').doc('fechamentos').set({ map: { [F.mes]: { em: new Date().toISOString(), por: state.user.email, vencido: fim('VENCIDO'), avariado: fim('AVARIADO') } } }, { merge: true }); } catch (e) { console.error(e); }
+    msg('#fres', 'ok', `✔ Ajuste lançado. ${mesLabel(F.mes)} no site agora: vencidos ${brl(fim('VENCIDO'))}${F.VENCIDO ? ` (sistema ${brl(F.VENCIDO.total)})` : ''} · avariados ${brl(fim('AVARIADO'))}${F.AVARIADO ? ` (sistema ${brl(F.AVARIADO.total)})` : ''}. <a href="?tab=painel&mes=${F.mes}" style="font-weight:800;color:#1E7B46">Abrir o painel de ${mesLabel(F.mes)} →</a> (é este painel que abre pelo botão Perdas da Gestão de Desempenho)`);
     $('#faplicar')?.remove();
     if (F.mes === state.mes) { await loadMes(); state.tab = 'importar'; render(); }
   } catch (e) { console.error(e); msg('#fres', 'err', '✖ ' + esc(e.message)); }
