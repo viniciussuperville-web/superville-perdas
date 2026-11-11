@@ -36,7 +36,8 @@ const GUIA = [
   ['Quilos / Unidades', 'Quantidade total perdida no mês.'],
   ['Vencido (R$)', 'Valor dos produtos que passaram da validade.'],
   ['Avariado (R$)', 'Valor dos produtos que estragaram, quebraram ou ficaram impróprios para venda.'],
-  ['Total (R$)', 'Vencido + avariado. Os valores são a preço de custo (o que pagamos ao fornecedor).'],
+  ['Ajuste de estoque (R$)', 'Sobras e perdas da Padaria (sobra de vitrine, sobra de mesa, perda) e da Floricultura, lançadas no fim do mês.'],
+  ['Total (R$)', 'Vencido + avariado + ajuste de estoque. Os valores são a preço de custo (o que pagamos ao fornecedor).'],
   ['Vezes recolhido', 'Quantas vezes o produto foi lançado como perda no mês. Muitas vezes = problema que se repete.'],
   ['', ''],
   ['DICAS', ''],
@@ -60,13 +61,13 @@ export function exportExcel(nome, label, cons, rows, extra = []) {
     const lst = cons.filter(a => a.unit === unit);
     const fq = unit === 'kg' ? '#,##0.000' : '#,##0';
     XLSX.utils.book_append_sheet(wb, sheet(t, `${nome} · ${label} · Loja 1`,
-      [['#', 5], ['PLU', 11], ['Produto', 44], ['Setor', 22], ['Tipo de produto', 22], [qn, 11], [`${qn} vencid${unit === 'un' ? 'as' : 'os'}`, 12], [`${qn} avariad${unit === 'un' ? 'as' : 'os'}`, 12], ['Vencido (R$)', 13], ['Avariado (R$)', 13], ['Total (R$)', 13], ['Vezes recolhido', 11]],
-      lst.map((a, i) => [i + 1, a.plu, a.desc, a.mix, a.seg, a.q, a.qv, a.qa, a.ven, a.ava, a.tot, a.n]),
-      [null, null, null, null, null, fq, fq, fq, RS, RS, RS, '0'], [5, 6, 7, 8, 9, 10, 11]), t.slice(0, 31));
+      [['#', 5], ['PLU', 11], ['Produto', 44], ['Setor', 22], ['Tipo de produto', 22], [qn, 11], [`${qn} vencid${unit === 'un' ? 'as' : 'os'}`, 12], [`${qn} avariad${unit === 'un' ? 'as' : 'os'}`, 12], [`${qn} em ajuste`, 12], ['Vencido (R$)', 13], ['Avariado (R$)', 13], ['Ajuste de estoque (R$)', 14], ['Total (R$)', 13], ['Vezes recolhido', 11]],
+      lst.map((a, i) => [i + 1, a.plu, a.desc, a.mix, a.seg, a.q, a.qv, a.qa, a.qj || 0, a.ven, a.ava, a.aju || 0, a.tot, a.n]),
+      [null, null, null, null, null, fq, fq, fq, fq, RS, RS, RS, RS, '0'], [5, 6, 7, 8, 9, 10, 11, 12, 13]), t.slice(0, 31));
   }
   XLSX.utils.book_append_sheet(wb, sheet('TODOS OS REGISTROS', `${nome} · ${label} · Loja 1`,
     [['Data', 11], ['Tipo', 11], ['PLU', 11], ['Produto', 44], ['Setor', 22], ['Encarregado', 15], ['Gerente', 16], ['Tipo de produto', 22], ['Unidade', 9], ['Quantidade', 11], ['Valor (R$)', 13]],
-    [...rows].sort((a, b) => b.valor - a.valor).map(x => [x.data.split('-').reverse().join('/'), x.tipo, x.plu, x.desc, x.mix, x.enc, x.ger, x.seg, x.pes, x.pes === 'kg' ? x.kg : x.un, x.valor]),
+    [...rows].sort((a, b) => b.valor - a.valor).map(x => [x.data.split('-').reverse().join('/'), x.tipo === 'AJUSTE' ? 'AJUSTE · ' + (x.motivo || '') : x.tipo, x.plu, x.desc, x.mix, x.enc, x.ger, x.seg, x.pes, x.pes === 'kg' ? x.kg : x.un, x.valor]),
     [null, null, null, null, null, null, null, null, null, '#,##0.###', RS], [10]), 'REGISTROS');
   XLSX.writeFile(wb, `PERDAS_${nome.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, '_')}_${label.replace('/', '_')}.xlsx`);
 }

@@ -1,7 +1,7 @@
 // SuperVille · Gestão de Perdas — aplicação
 import { firebaseConfig, LOJA, MESES, ADMINS } from './config.js';
 import { loadCatalog, classify, setManual, setResponsaveis, mixList, mixInfo, num, brl, pct, esc, sum, consolidate, kpiVenda, OCULTO, setOculto } from './core.js';
-import { parseTrocas, parseVendas } from './parse.js';
+import { parseTrocas, parseVendas, parseAjuste } from './parse.js';
 import * as R from './report.js';
 import { columns, hbar, donut } from './charts.js';
 import { exportExcel } from './excel.js';
@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '27';
+export const APP_V = '28';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -128,25 +128,25 @@ function bindFiltro() {
 }
 function pizza(itens, tot, titulo) {
   const top = itens.slice(0, 9), resto = itens.slice(9).reduce((s, [, a]) => s + a.tot, 0);
-  const parts = top.map(([k, a], i) => [k, a.tot, PAL[i]]); if (resto > 0) parts.push(['Demais', resto, PAL[10]]);
+  const parts = top.map(([k, a], i) => [k, a.tot, a.cor || PAL[i]]); if (resto > 0) parts.push(['Demais', resto, PAL[10]]);
   return `<div class="pieRow"><div>${donut(parts, [OCULTO ? '100%' : brl(tot, 0), titulo])}</div><div class="leg">${parts.map(([k, v, c]) => `<div><i style="background:${c}"></i>${esc(k)}<em>${pct(v / tot)}${OCULTO ? '' : ' · ' + brl(v, 0)}</em></div>`).join('')}</div></div>`;
 }
 function painel(m) {
   syncURL();
   if (!state.rows.length) { m.innerHTML = filtroBar() + `<div class="card empty"><b>Nenhuma perda importada em ${mesLabel(state.mes)}.</b><br><br>Vá na aba <b>Importar</b> e envie os relatórios de vencidos e avariados.</div>`; bindFiltro(); return; }
   const c = R.ctxOf(state.rows, state.mes, state.vendas);
-  const dias = new Set(state.rows.filter(x => x.origem !== 'Ajuste do fechamento').map(x => x.data)).size;
+  const dias = new Set(state.rows.filter(x => x.origem !== 'Ajuste do fechamento' && x.tipo !== 'AJUSTE').map(x => x.data)).size;
   if (state.setor && !c.bymix.some(([k]) => k === state.setor)) state.setor = '';
   if (state.setor) {
     const rr = state.rows.filter(x => x.mix === state.setor), cs = R.ctxOf(rr, state.mes, null), info = mixInfo(state.setor);
     const posi = c.bymix.findIndex(([k]) => k === state.setor) + 1;
     m.innerHTML = filtroBar() + `<div class="card"><h2 style="margin-top:0">${esc(state.setor)} · ${mesLabel(state.mes)}</h2><div class="sub">Encarregado: <b>${esc(info.enc || '—')}</b> · Gerente: <b>${esc(info.ger || '—')}</b> · ${posi}º setor que mais perdeu na loja</div>
-      <div class="kpis">${[['Perda do setor', brl(cs.tot, 0), `${pct(cs.tot / c.tot)} de toda a perda da loja`, 'red'], ['Vencido', brl(cs.ven, 0), `${pct(cs.ven / (cs.tot || 1))} do setor`, 'dark'], ['Avariado', brl(cs.ava, 0), `${pct(cs.ava / (cs.tot || 1))} do setor`, ''], ['Por quilo', num(cs.kg) + ' kg', 'produtos pesados', ''], ['Por unidade', num(cs.un) + ' un', 'produtos contados', 'dark']]
+      <div class="kpis">${[['Perda do setor', brl(cs.tot, 0), `${pct(cs.tot / c.tot)} de toda a perda da loja`, 'red'], ['Vencido', brl(cs.ven, 0), `${pct(cs.ven / (cs.tot || 1))} do setor`, 'dark'], ['Avariado', brl(cs.ava, 0), `${pct(cs.ava / (cs.tot || 1))} do setor`, ''], ...(cs.aju > 0 ? [['Ajuste de estoque', brl(cs.aju, 0), `${pct(cs.aju / (cs.tot || 1))} do setor · sobras e perdas`, 'orange']] : []), ['Por quilo', num(cs.kg) + ' kg', 'produtos pesados', ''], ['Por unidade', num(cs.un) + ' un', 'produtos contados', 'dark']]
         .map(([l, v, s2, k]) => `<div class="kpi ${k}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s2}</div></div>`).join('')}</div></div>
       <div class="grid2"><div class="card">${(() => { const sg = Object.entries(rr.reduce((o, x) => { const a = o[x.seg || 'Outros'] ||= { tot: 0 }; a.tot += x.valor; return o; }, {})).sort((a, b) => b[1].tot - a[1].tot);
         return sg.length > 1 ? `<h2>Por tipo de produto</h2>${pizza(sg, cs.tot, 'perda do setor')}${R.ler('cada fatia é um tipo de produto do setor, do que mais perdeu para o que menos perdeu.')}`
           : `<h2>Produtos que mais pesaram</h2>${pizza(cs.cons.map(a => [a.desc, a]), cs.tot, 'perda do setor')}${R.ler('cada fatia é um produto, do que mais perdeu para o que menos perdeu. "Demais" junta todos os outros produtos do setor.')}`; })()}</div>
-      <div class="card"><h2>Vencido x avariado</h2>${pizza([['Vencido', { tot: cs.ven }], ['Avariado', { tot: cs.ava }]].sort((a, b) => b[1].tot - a[1].tot), cs.tot, 'perda do setor')}${R.ler('quanto da perda do setor passou da validade (vencido) e quanto estragou (avariado).')}</div></div>
+      <div class="card"><h2>${cs.aju > 0 ? 'Vencido, avariado e ajuste' : 'Vencido x avariado'}</h2>${pizza([['Vencido', { tot: cs.ven, cor: '#1F1F1F' }], ['Avariado', { tot: cs.ava, cor: '#3BB072' }], ['Ajuste de estoque', { tot: cs.aju, cor: '#E07B39' }]].filter(p => p[1].tot > 0).sort((a, b) => b[1].tot - a[1].tot), cs.tot, 'perda do setor')}${R.ler('quanto da perda do setor passou da validade (vencido), quanto estragou (avariado)' + (cs.aju > 0 ? ' e quanto foi ajuste de estoque (sobra de vitrine, sobra de mesa ou perda lançada no fim do mês)' : '') + '.')}</div></div>
       <div class="card">${R.secAcoes(cs, rr)}</div>
       <div class="card"><h2>Produtos que mais deram perda</h2>${R.secTop(cs)}</div>
       <div class="grid2"><div class="card"><h2>Produtos por quilo (kg)</h2>${R.secUnit(cs, 'kg')}</div><div class="card"><h2>Produtos por unidade (un)</h2>${R.secUnit(cs, 'un')}</div></div>
@@ -182,6 +182,10 @@ function importar(m) {
       <span class="muted" style="font-weight:400">Deixe em branco para usar a data impressa no relatório. Se tirou o relatório no dia seguinte, escolha aqui o dia certo das perdas.</span></label>
     <div class="grid2"><div class="drop" data-tipo="VENCIDO"><b>Vencidos</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div>
     <div class="drop" data-tipo="AVARIADO"><b>Avariados</b><span class="muted">clique ou arraste o PDF aqui</span><input type="file" accept="application/pdf" hidden multiple></div></div><div id="imsg">${msgsHTML('#imsg')}</div></div>
+    <div class="card"><h2>Padaria e Floricultura — ajustes de estoque (fim do mês)</h2>
+    <p class="muted">Uma vez por mês, depois que o mês terminar, tire no sistema o <b>Relatório de Ajuste de Estoque</b> do mês inteiro (dia 1º ao último dia) e envie aqui. São <b>quatro PDFs</b>: Padaria — <b>Perda</b>, <b>Sobra de mesa</b> e <b>Sobra de vitrine</b>; Flores — <b>Perda</b>. Pode arrastar os quatro de uma vez. Eles entram como <b>Ajuste de estoque</b> (cor laranja nos gráficos), nos setores Padaria e Garden (floricultura). Se enviar de novo, substitui sem duplicar.</p>
+    ${(() => { const aj = state.imports.filter(i => i.tipo === 'AJUSTE'); return aj.length ? `<div class="msg ok">✔ Já enviados em ${mesLabel(state.mes)}: ${aj.map(i => `${esc(i.setor || '')} · ${esc(i.motivo || '')} (${brl(i.total)})`).join(' · ')}</div>` : `<div class="msg info">Nenhum ajuste de estoque enviado em ${mesLabel(state.mes)} ainda.</div>`; })()}
+    <div class="drop" data-tipo="AJUSTE" style="margin-top:10px"><b>Ajustes de estoque — Padaria e Flores</b><span class="muted">clique ou arraste os PDFs aqui (pode ser vários)</span><input type="file" accept="application/pdf" hidden multiple></div><div id="amsg">${msgsHTML('#amsg')}</div></div>
     <div class="card"><h2>Fechamento do mês — bater com o sistema</h2>
     <p class="muted">No fim do mês, tire do sistema o <b>Trocas de Fornecedores do mês inteiro</b>: vencidos, avariados e o total. O site compara produto por produto com o que foi enviado no dia a dia e lança um <b>ajuste do fechamento</b> com a diferença (custo atualizado, arredondamento, lançamentos alterados depois), para o mês ficar igual ao do sistema. Os dias continuam como estão. Pode refazer quantas vezes quiser: o ajuste é recalculado, não duplica.</p>
     <label class="field" style="max-width:260px;margin-bottom:12px">Mês do fechamento<select id="fmes">${mesesOpcoes().filter(k => k <= mesAtual()).map(k => `<option value="${k}" ${k === (state.fech?.mes || mesFechPadrao()) ? 'selected' : ''}>${mesLabel(k)}</option>`).join('')}</select></label>
@@ -228,6 +232,7 @@ async function sitePorProduto(mes) {
   const por = { VENCIDO: {}, AVARIADO: {} }, tot = { VENCIDO: 0, AVARIADO: 0 }, ajuste = {};
   for (const d of docs) {
     if (d.ajuste) { ajuste[d.tipo] = d; continue; }
+    if (!por[d.tipo]) continue;   // ajuste de estoque (padaria/flores) não entra na conferência de trocas
     tot[d.tipo] += d.total;
     for (const it of d.items) { const a = por[d.tipo][it.plu] ||= { qtd: 0, valor: 0, desc: it.desc, cod: it.cod || '' }; a.qtd += Number(it.qtd) || 0; a.valor += it.valor; }
   }
@@ -310,7 +315,7 @@ const intro = (t, passos) => `<div class="intro"><b>${t}</b>${passos ? `<ol>${pa
 // calendário do mês: quais dias já foram enviados
 function calendarioMes() {
   const mes = state.mes, [y, m] = mes.split('-').map(Number), n = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay();
-  const tem = {}; state.imports.filter(i => !i.ajuste).forEach(i => { if (i.data.startsWith(mes)) (tem[+i.data.slice(8)] ||= {})[i.tipo] = i; });
+  const tem = {}; state.imports.filter(i => !i.ajuste && i.tipo !== 'AJUSTE').forEach(i => { if (i.data.startsWith(mes)) (tem[+i.data.slice(8)] ||= {})[i.tipo] = i; });
   const hojeK = hojeISO();
   let h = '<div class="cal">' + ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => `<div class="cal-h">${d}</div>`).join('') + '<div></div>'.repeat(first);
   for (let d = 1; d <= n; d++) {
@@ -346,6 +351,29 @@ async function handle(tipo, files) {
         }
         if (j.vendas) for (const v of j.vendas) await db.collection('vendas').doc(`${v.loja}_${v.mes}`).set(v);
         await loadMes(); state.tab = 'importar'; render();
+      } else if (tipo === 'AJUSTE') {
+        const r = await parseAjuste(f);
+        if (!r.items.length) throw new Error('Nenhum item encontrado no PDF.');
+        if (r.loja && r.loja !== LOJA.id) throw new Error(`O relatório é da loja ${r.loja}; este painel é da loja ${LOJA.id}.`);
+        if (!r.mes) throw new Error('Não encontrei o período do relatório (de … até …).');
+        if (anoFechado(r.mes.slice(0, 4))) throw new Error(`O ano ${r.mes.slice(0, 4)} está fechado. Para corrigir algo nele, reabra o ano na aba Anual.`);
+        if (r.inicio.slice(0, 7) !== r.fim.slice(0, 7)) throw new Error('O relatório precisa ser de um mês só (do dia 1º ao último dia do mês).');
+        const conf = r.totalRelatorio != null && Math.abs(r.totalRelatorio - r.total) > 0.5 ? ` <b>Atenção:</b> o total do relatório é ${brl(r.totalRelatorio)}.` : ' Total confere com o relatório.';
+        const sem = r.items.filter(x => !x.mix).length;
+        if (sem) throw new Error(`O relatório tem setor que o site não conhece (${r.setores.join(', ')}). Envie só os relatórios da Padaria e das Flores.`);
+        const grupos = {}; r.items.forEach(x => (grupos[x.setorRel + '|' + x.motivo] ||= []).push(x));
+        const slug = t => t.normalize('NFD').replace(/[^A-Za-z0-9]+/g, '').toUpperCase();
+        const ult = ultimoDia(r.mes), lst = Object.entries(grupos).map(([k, its]) => { const [setor, motivo] = k.split('|'); return { id: `${LOJA.id}_${r.mes}_ESTOQUE_${slug(setor)}_${slug(motivo)}`, setor, motivo, its }; });
+        const exs = (await Promise.all(lst.map(g => db.collection('imports').doc(g.id).get()))).filter(e => e.exists);
+        if (exs.length && !confirm(`Já existe ajuste de estoque de ${lst.map(g => g.setor.toLowerCase() + ' · ' + g.motivo.toLowerCase()).join(', ')} em ${mesLabel(r.mes)}. Substituir pelo novo arquivo? (não duplica)`)) continue;
+        for (const g of lst) {
+          const items = g.its.map(({ setorRel, ...x }) => x), tot = Math.round(items.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+          await db.collection('imports').doc(g.id).set({ loja: LOJA.id, data: ult, mes: r.mes, tipo: 'AJUSTE', estoque: true, setor: g.setor, motivo: g.motivo, arquivo: f.name, items, total: tot, n: items.length,
+            criadoEm: firebase.firestore.FieldValue.serverTimestamp(), criadoPor: state.user.email });
+        }
+        msg('#amsg', 'ok', `<b>${esc(f.name)}</b> importado com sucesso — ajuste de estoque de ${mesLabel(r.mes)} (${lst.map(g => `${esc(g.setor.toLowerCase())}: ${esc(g.motivo.toLowerCase())}`).join('; ')}): ${r.items.length} lançamentos, ${brl(r.total)}.${conf}`);
+        if (r.mes !== state.mes) { state.mes = r.mes; renderShell(); }
+        await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       } else if (tipo.startsWith('F')) {
         await handleFech(tipo.slice(1), f);
       } else {
@@ -388,7 +416,7 @@ async function handle(tipo, files) {
         if (mes !== state.mes) { state.mes = mes; renderShell(); }
         await loadMes(); state.tab = 'importar'; renderShellTabs(); render();
       }
-    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `<b>${esc(f.name)}</b> não foi importado: ${esc(/invalid pdf|pdf structure|missing pdf/i.test(e.message) ? 'o arquivo não é um PDF válido ou está corrompido. Gere o PDF de novo no sistema.' : /permission|insufficient/i.test(e.message) ? 'sem permissão para gravar. Saia e entre de novo no site.' : /network|offline|unavailable/i.test(e.message) ? 'sem conexão com a internet. Tente de novo em instantes.' : e.message)}`); }
+    } catch (e) { console.error(e); msg(tipo === 'VENDAS' ? '#vmsg' : tipo === 'JSON' ? '#jmsg' : tipo === 'AJUSTE' ? '#amsg' : tipo.startsWith('F') ? '#fres' : '#imsg', 'err', `<b>${esc(f.name)}</b> não foi importado: ${esc(/invalid pdf|pdf structure|missing pdf/i.test(e.message) ? 'o arquivo não é um PDF válido ou está corrompido. Gere o PDF de novo no sistema.' : /permission|insufficient/i.test(e.message) ? 'sem permissão para gravar. Saia e entre de novo no site.' : /network|offline|unavailable/i.test(e.message) ? 'sem conexão com a internet. Tente de novo em instantes.' : e.message)}`); }
     finally { const t = $('#toast'); if (t && t.classList.contains('info')) t.style.display = 'none'; }
   }
 }
@@ -458,7 +486,7 @@ async function dadosAno(ano) {
   const vq = await db.collection('vendas').where('loja', '==', LOJA.id).get();
   const vend = {}; vq.docs.forEach(d => { const v = d.data(); if (v.mes?.startsWith(ano)) vend[v.mes] = v; });
   const meses = {};
-  docs.forEach(i => { const x = meses[i.mes] ||= { ven: 0, ava: 0 }; x[i.tipo === 'VENCIDO' ? 'ven' : 'ava'] += i.total; });
+  docs.forEach(i => { const x = meses[i.mes] ||= { ven: 0, ava: 0, aju: 0 }; x[i.tipo === 'VENCIDO' ? 'ven' : i.tipo === 'AJUSTE' ? 'aju' : 'ava'] += i.total; });
   for (const k in meses) { const v = vend[k], t = v?.deptos?.find(d => d.depto === '0'); Object.assign(meses[k], { venda: t?.venda || 0, lucro: t?.lucro || 0, deptos: v?.deptos || [] }); }
   const rows = docs.flatMap(imp => (imp.items || []).map(it => classify(it, imp)));
   return { ano, docs, vend, meses, rows, fechado: !!anoFechado(ano) };
@@ -479,8 +507,8 @@ async function anual(m) {
     ? `<div class="msg ok">🔒 <b>Ano ${ano} fechado</b> em ${new Date(info.em).toLocaleDateString('pt-BR')} por ${esc(info.por || '')}. Os dados ficam guardados e podem ser consultados e exportados; novas importações para ${ano} ficam bloqueadas.</div>`
     : `<div class="msg info">Ano <b>${ano}</b> aberto — recebendo os relatórios do dia a dia.${podeFechar ? '' : ` O fechamento fica disponível a partir de <b>dezembro de ${ano}</b>.`}</div>`;
   if (!ks.length) { m.innerHTML = `<div class="card"><div class="flex">${sel}</div>${status}<div class="empty">Sem dados em ${ano}. É só começar a importar os relatórios do dia a dia na aba Importar.</div></div>`; bindAno(); return; }
-  const tv = ks.reduce((s, k) => s + A.meses[k].ven, 0), ta = ks.reduce((s, k) => s + A.meses[k].ava, 0), tot = tv + ta;
-  const comV = ks.filter(k => A.meses[k].venda), vv = comV.reduce((s, k) => s + A.meses[k].venda, 0), pv = comV.reduce((s, k) => s + A.meses[k].ven + A.meses[k].ava, 0);
+  const tv = ks.reduce((s, k) => s + A.meses[k].ven, 0), ta = ks.reduce((s, k) => s + A.meses[k].ava + (A.meses[k].aju || 0), 0), tot = tv + ta;
+  const comV = ks.filter(k => A.meses[k].venda), vv = comV.reduce((s, k) => s + A.meses[k].venda, 0), pv = comV.reduce((s, k) => s + (A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)), 0);
   m.innerHTML = `<div class="card"><div class="flex" style="align-items:flex-end">${sel}<div class="sp" style="flex:1"></div>
       <button class="btn" id="ra">Relatório anual (PDF)</button><button class="btn out" id="xa">Excel do ano</button><button class="btn out" id="ja">Arquivo do ano (JSON)</button></div>${status}
     <h2>Perdas de ${ano}, mês a mês</h2>
@@ -488,9 +516,9 @@ async function anual(m) {
       ['De cada R$ 100 vendidos', vv ? 'R$ ' + num(pv / vv * 100, 2) : '-', vv ? `${comV.length} mês(es) com venda` : 'aguardando vendas', ''], ['Vencido', brl(tv, 0), pct(tv / tot), 'dark'],
       [A.fechado || ks.length === 12 ? 'Avariado' : 'Projeção 12 meses', A.fechado || ks.length === 12 ? brl(ta, 0) : brl(tot / ks.length * 12, 0), A.fechado || ks.length === 12 ? pct(ta / tot) : 'se a média se mantiver', '']]
       .map(([l, v, s, c]) => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('')}</div>
-    <h2>Evolução</h2>${columns(ks.map(k => ({ label: MESES[+k.slice(5)].slice(0, 3), ven: A.meses[k].ven, ava: A.meses[k].ava })))}
+    <h2>Evolução</h2>${columns(ks.map(k => ({ label: MESES[+k.slice(5)].slice(0, 3), ven: A.meses[k].ven, ava: A.meses[k].ava, aju: A.meses[k].aju || 0 })))}
     ${R.ler('cada coluna é um mês, na ordem do calendário (para ver a evolução). Preto = venceu, verde = estragou. O número em cima é o total do mês em milhares de reais.')}
-    <h2>Ranking dos meses — do que mais perdeu para o que menos perdeu</h2>${hbar(ks.map(k => [MESES[+k.slice(5)], { ven: A.meses[k].ven, ava: A.meses[k].ava }]), tot, { labelWidth: 110, qty: false, endfmt: t => `${brl(t, 0)} · ${pct(t / tot)} do ano` })}
+    <h2>Ranking dos meses — do que mais perdeu para o que menos perdeu</h2>${hbar(ks.map(k => [MESES[+k.slice(5)], { ven: A.meses[k].ven, ava: A.meses[k].ava, aju: A.meses[k].aju || 0 }]), tot, { labelWidth: 110, qty: false, endfmt: t => `${brl(t, 0)} · ${pct(t / tot)} do ano` })}
     ${R.secAnoMeses(R.anualCtx(A))}</div>
     <div class="card"><h2>Fechar o ano</h2>
       <p class="muted">No fim do ano, o fechamento: <b>1)</b> baixa o arquivo completo do ano (backup em um só arquivo), <b>2)</b> compacta os relatórios diários de cada mês em um só por mês (vencidos e avariados), mantendo o dia de cada item, <b>3)</b> tranca o ano contra importações por engano e <b>4)</b> o site segue no ano novo, de janeiro a dezembro, para alimentar dia a dia. O relatório anual continua disponível aqui a qualquer momento.</p>
@@ -517,15 +545,15 @@ function baixarAno(A) {
 
 function excelAno(A) {
   const c = R.anualCtx(A), ks = c.ks;
-  const meses = ks.map(k => { const x = A.meses[k], t = x.ven + x.ava; return [MESES[+k.slice(5)], x.ven, x.ava, t, x.venda || '', x.venda ? t / x.venda : '']; });
+  const meses = ks.map(k => { const x = A.meses[k], t = x.ven + x.ava + (x.aju || 0); return [MESES[+k.slice(5)], x.ven, x.ava + (x.aju || 0), t, x.venda || '', x.venda ? t / x.venda : '']; });
   const n = ks.length, tv = c.ven, ta = c.ava;
-  const vv = ks.reduce((s, k) => s + (A.meses[k].venda || 0), 0), pv = ks.filter(k => A.meses[k].venda).reduce((s, k) => s + A.meses[k].ven + A.meses[k].ava, 0), nv = ks.filter(k => A.meses[k].venda).length;
+  const vv = ks.reduce((s, k) => s + (A.meses[k].venda || 0), 0), pv = ks.filter(k => A.meses[k].venda).reduce((s, k) => s + (A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)), 0), nv = ks.filter(k => A.meses[k].venda).length;
   const RS = '"R$" #,##0.00;-"R$" #,##0.00;"-"';
   const top = c.bymix.map(([k]) => k), mm = {};
   c.rows.forEach(x => { (mm[x.mix] ||= {})[x.mes] = (mm[x.mix][x.mes] || 0) + x.valor; });
   const setores = top.map(k => [k, mixInfo(k).enc || '', mixInfo(k).ger || '', ...ks.map(x => mm[k]?.[x] || 0), ks.reduce((s, x) => s + (mm[k]?.[x] || 0), 0), ks.reduce((s, x) => s + (mm[k]?.[x] || 0), 0) / n]);
   exportExcel('Loja 1 · Anual', String(A.ano), c.cons, A.rows, [
-    { name: 'MESES', title: `PERDAS DE ${A.ano} MÊS A MÊS`, cols: [['Mês', 18], ['Vencido (R$)', 15], ['Avariado (R$)', 15], ['Total (R$)', 15], ['Venda (R$)', 17], ['Perda ÷ venda', 13]],
+    { name: 'MESES', title: `PERDAS DE ${A.ano} MÊS A MÊS`, cols: [['Mês', 18], ['Vencido (R$)', 15], ['Avariado e ajuste (R$)', 17], ['Total (R$)', 15], ['Venda (R$)', 17], ['Perda ÷ venda', 13]],
       rows: meses, fmts: [null, RS, RS, RS, RS, '0.00%'], totCols: [1, 2, 3, 4], after: [['MÉDIA POR MÊS', tv / n, ta / n, (tv + ta) / n, nv ? vv / nv : '', vv ? pv / vv : '']] },
     { name: 'SETORES POR MÊS', title: `SETORES MÊS A MÊS · ${A.ano}`, cols: [['Setor', 26], ['Encarregado', 14], ['Gerente', 14], ...ks.map(k => [MESES[+k.slice(5)].slice(0, 3), 12]), ['Total do ano', 15], ['Média por mês', 14]],
       rows: setores, fmts: [null, null, null, ...ks.map(() => RS), RS, RS], totCols: [...ks.map((_, i) => i + 3), ks.length + 3, ks.length + 4] },

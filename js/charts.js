@@ -1,6 +1,6 @@
 // Gráficos em SVG (mesmo visual na tela e no PDF)
 import { num, brl, pct, esc, qfmt } from './core.js';
-export const C = { green: '#3BB072', black: '#1F1F1F', dgreen: '#1E7B46', lgreen: '#A9DCC0', red: '#D64545', yel: '#F2B705', grey: '#BFBFBF' };
+export const C = { orange: '#E07B39', green: '#3BB072', black: '#1F1F1F', dgreen: '#1E7B46', lgreen: '#A9DCC0', red: '#D64545', yel: '#F2B705', grey: '#BFBFBF' };
 export const LEG_V = 'Vencido (passou da validade)', LEG_A = 'Avariado (estragou, quebrou ou amassou)';
 const FONT = `font-family="Montserrat,Arial,sans-serif"`;
 
@@ -11,24 +11,29 @@ function legend(items, y = 14) {
 }
 
 // Barras horizontais empilhadas: % de cada parte dentro da barra, valor e % do total no fim, quantidade abaixo do nome
+export const LEG_J = 'Ajuste de estoque (padaria e flores)';
 export function hbar(items, baseTotal, o = {}) {
-  const keys = o.keys || ['ven', 'ava'], cols = o.colors || [C.black, C.green], leg = o.legend || [LEG_V, LEG_A];
+  let keys = o.keys || ['ven', 'ava', 'aju'], cols = o.colors || [C.black, C.green, C.orange], leg = o.legend || [LEG_V, LEG_A, LEG_J];
+  if (!o.keys) { const use = keys.map(k => items.some(([, a]) => (a[k] || 0) > 0)); use[0] = use[1] = true; keys = keys.filter((_, i) => use[i]); cols = cols.filter((_, i) => use[i]); leg = leg.filter((_, i) => use[i]); }
+  const T = a => keys.reduce((s2, k) => s2 + (a[k] || 0), 0);
   // sempre do que mais perdeu para o que menos perdeu
-  items = items.filter(([, a]) => (a[keys[0]] || 0) + (a[keys[1]] || 0) > 0).sort((x, y) => ((y[1][keys[0]] || 0) + (y[1][keys[1]] || 0)) - ((x[1][keys[0]] || 0) + (x[1][keys[1]] || 0)));
+  items = items.filter(([, a]) => T(a) > 0).sort((x, y) => T(y[1]) - T(x[1]));
   const W = o.width || 760, LW = o.labelWidth || 200, RH = 36, top = 34, H = top + items.length * RH + 6;
-  const mx = Math.max(1, ...items.map(([, a]) => a[keys[0]] + a[keys[1]]));
+  const mx = Math.max(1, ...items.map(([, a]) => T(a)));
   const BW = (W - LW - 10) / (W < 700 ? 1.8 : 1.45);
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" ${FONT} xmlns="http://www.w3.org/2000/svg"><g>${legend([[cols[0], leg[0]], [cols[1], leg[1]]])}</g>`;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" ${FONT} xmlns="http://www.w3.org/2000/svg"><g>${legend(keys.map((_, i) => [cols[i], leg[i]]))}</g>`;
   items.forEach(([nome, a], i) => {
-    const y = top + i * RH, p = a[keys[0]] || 0, q = a[keys[1]] || 0, t = p + q;
-    const w1 = p / mx * BW, w2 = q / mx * BW;
+    const y = top + i * RH, t = T(a);
     const sub = o.qty === false ? '' : qfmt(a.un, a.kg);
     s += `<text x="${LW - 8}" y="${y + (sub ? 13 : 18)}" text-anchor="end" font-size="11.5" font-weight="600" fill="#262626">${esc(nome)}</text>`;
     if (sub) s += `<text x="${LW - 8}" y="${y + 27}" text-anchor="end" font-size="10" fill="#7a7a7a">${esc(sub)}</text>`;
-    s += `<rect x="${LW}" y="${y + 5}" width="${w1}" height="24" fill="${cols[0]}"/><rect x="${LW + w1}" y="${y + 5}" width="${w2}" height="24" fill="${cols[1]}"/>`;
-    for (const [x0, w, v] of [[LW, w1, p], [LW + w1, w2, q]]) if (t && w > 34) s += `<text x="${x0 + w / 2}" y="${y + 21}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">${pct(v / t, 0)}</text>`;
+    let x0 = LW;
+    keys.forEach((k, j) => { const v = a[k] || 0, w = v / mx * BW; if (!w) return;
+      s += `<rect x="${x0}" y="${y + 5}" width="${w}" height="24" fill="${cols[j]}"/>`;
+      if (t && w > 34) s += `<text x="${x0 + w / 2}" y="${y + 21}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">${pct(v / t, 0)}</text>`;
+      x0 += w; });
     const lbl = o.endfmt ? o.endfmt(t, a) : `${brl(t, 0)} · ${pct(t / baseTotal)} do total`;
-    s += `<text x="${LW + w1 + w2 + 6}" y="${y + 21}" font-size="11.5" font-weight="700" fill="#262626">${esc(lbl)}</text>`;
+    s += `<text x="${x0 + 6}" y="${y + 21}" font-size="11.5" font-weight="700" fill="#262626">${esc(lbl)}</text>`;
   });
   return s + '</svg>';
 }
@@ -79,15 +84,17 @@ export function metaBars(linhas) {
   return s + '</svg>';
 }
 
-// Colunas por dia ou por mês (vencido + avariado empilhados)
+// Colunas por dia ou por mês (vencido + avariado + ajuste de estoque empilhados)
 export function columns(series, o = {}) {
   const W = 760, H = o.height || 220, L = 10, B = 34, T = 30, n = series.length || 1;
-  const mx = Math.max(1, ...series.map(s => s.ven + s.ava)), bw = Math.min(46, (W - L * 2) / n * 0.7), step = (W - L * 2) / n;
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" ${FONT} xmlns="http://www.w3.org/2000/svg">` + legend([[C.black, 'Vencido'], [C.green, 'Avariado']]);
+  const tot = d => (d.ven || 0) + (d.ava || 0) + (d.aju || 0), temAju = series.some(d => (d.aju || 0) > 0);
+  const mx = Math.max(1, ...series.map(tot)), bw = Math.min(46, (W - L * 2) / n * 0.7), step = (W - L * 2) / n;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" ${FONT} xmlns="http://www.w3.org/2000/svg">` + legend([[C.black, 'Vencido'], [C.green, 'Avariado'], ...(temAju ? [[C.orange, 'Ajuste de estoque']] : [])]);
   series.forEach((d, i) => {
-    const x = L + i * step + (step - bw) / 2, h1 = d.ven / mx * (H - B - T - 14), h2 = d.ava / mx * (H - B - T - 14), y0 = H - B;
-    s += `<rect x="${x}" y="${y0 - h1}" width="${bw}" height="${h1}" fill="${C.black}"/><rect x="${x}" y="${y0 - h1 - h2}" width="${bw}" height="${h2}" fill="${C.green}"/>`;
-    if (o.values !== false) s += `<text x="${x + bw / 2}" y="${y0 - h1 - h2 - 4}" text-anchor="middle" font-size="${n > 20 ? 7.5 : 10}" font-weight="700" fill="#262626">${o.fmt ? o.fmt(d.ven + d.ava) : num((d.ven + d.ava) / 1000, 1) + ' mil'}</text>`;
+    const x = L + i * step + (step - bw) / 2, k = (H - B - T - 14) / mx, y0 = H - B;
+    let y = y0;
+    for (const [v, c] of [[d.ven || 0, C.black], [d.ava || 0, C.green], [d.aju || 0, C.orange]]) { const h = v * k; if (h > 0) { s += `<rect x="${x}" y="${y - h}" width="${bw}" height="${h}" fill="${c}"/>`; y -= h; } }
+    if (o.values !== false) s += `<text x="${x + bw / 2}" y="${y - 4}" text-anchor="middle" font-size="${n > 20 ? 7.5 : 10}" font-weight="700" fill="#262626">${o.fmt ? o.fmt(tot(d)) : num(tot(d) / 1000, 1) + ' mil'}</text>`;
     s += `<text x="${x + bw / 2}" y="${y0 + 14}" text-anchor="middle" font-size="${n > 20 ? 8 : 10.5}" fill="#404040">${esc(d.label)}</text>`;
   });
   return s + `<line x1="${L}" x2="${W - L}" y1="${H - B}" y2="${H - B}" stroke="#BFBFBF"/></svg>`;

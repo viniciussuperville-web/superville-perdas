@@ -10,8 +10,8 @@ const u = unit => `<span class="u ${unit}">${unit}</span>`;
 
 export function ctxOf(rows, mes, vendas) {
   const [y, m] = mes.split('-');
-  const tot = sum(rows), ven = sum(rows.filter(x => x.tipo === 'VENCIDO'));
-  return { rows, mes, mesNome: MESES[+m], label: `${MESES[+m]}/${y}`, tot, ven, ava: tot - ven, kg: sum(rows, x => x.kg), un: sum(rows, x => x.un),
+  const tot = sum(rows), ven = sum(rows.filter(x => x.tipo === 'VENCIDO')), aju = sum(rows.filter(x => x.tipo === 'AJUSTE'));
+  return { rows, mes, mesNome: MESES[+m], label: `${MESES[+m]}/${y}`, tot, ven, aju, ava: tot - ven - aju, kg: sum(rows, x => x.kg), un: sum(rows, x => x.un),
     cons: consolidate(rows), bymix: group(rows, 'mix'), byger: group(rows, 'ger').filter(([k]) => k !== '—'), byenc: group(rows, 'enc').filter(([k]) => k !== '—'), vendas };
 }
 
@@ -20,20 +20,21 @@ export function secResumo(c) {
   const top2 = c.bymix.slice(0, 2).reduce((s, [, a]) => s + a.tot, 0);
   let h = '<div class="kpis">' + kpi('Quanto perdemos', brl(c.tot, 0), `${num(c.rows.length)} registros no ${c.per || 'mês'}`, 'red') +
     kpi('Vencido', brl(c.ven, 0), `${pct(c.ven / c.tot)} da perda`, 'dark') + kpi('Avariado', brl(c.ava, 0), `${pct(c.ava / c.tot)} da perda`) +
+    (c.aju > 0 ? kpi('Ajuste de estoque', brl(c.aju, 0), `${pct(c.aju / c.tot)} da perda · padaria e flores`, 'orange') : '') +
     kpi('Por quilo', num(c.kg) + ' kg', 'produtos pesados na balança') + kpi('Por unidade', num(c.un) + ' un', 'produtos contados um a um', 'dark') + '</div>';
   let frase = `Em ${c.mesNome.toLowerCase()} a loja perdeu <b>${brl(c.tot, 0)}</b> em produtos. `;
   if (k && k.vt) frase += `Isso é <b>${pct(c.tot / k.vt, 2)}</b> de tudo o que vendemos (meta: até ${num(MEDIA_LOJA * QUEBRA, 2)}%). `;
-  frase += `De cada <b>R$ 100</b> perdidos, <b>R$ ${num(c.ven / c.tot * 100)}</b> foram de produtos que <b>venceram</b> e <b>R$ ${num(c.ava / c.tot * 100)}</b> de produtos que <b>estragaram</b>.`;
+  frase += `De cada <b>R$ 100</b> perdidos, <b>R$ ${num(c.ven / c.tot * 100)}</b> foram de produtos que <b>venceram</b> e <b>R$ ${num(c.ava / c.tot * 100)}</b> de produtos que <b>estragaram</b>${c.aju > 0 ? ` e <b>R$ ${num(c.aju / c.tot * 100)}</b> de <b>ajustes de estoque</b> (sobras e perdas da padaria e das flores)` : ''}.`;
   h += `<div class="big">${frase}</div>`;
   if (c.bymix.length >= 2) h += `<h2>O mais importante</h2><div class="hl"><ul>
     <li><b>${esc(c.bymix[0][0])}</b> e <b>${esc(c.bymix[1][0])}</b> são os setores que mais perdem: juntos, <b>${pct(top2 / c.tot, 0)}</b> da perda (de cada R$ 100, R$ ${num(top2 / c.tot * 100)}).</li>
     <li>O produto que mais deu perda foi <b>${esc(c.cons[0].desc)}</b>: ${brl(c.cons[0].tot)}.</li>
     <li>Foram <b>${num(c.cons.length)}</b> produtos diferentes com perda no ${c.per || 'mês'}.</li></ul></div>`;
   h += `<div class="row"><div class="col" style="flex:1.75"><h2>Perda por gerente</h2>${hbar(c.byger, c.tot, { labelWidth: 150, width: 560 })}
-    ${ler('cada barra é um gerente. Preto = venceu, verde = estragou. O número dentro mostra a divisão entre os dois.')}</div>
-    <div class="col" style="flex:1"><h2>Venceu ou estragou?</h2><div class="center">${donut([['Vencido', c.ven, C.black], ['Avariado', c.ava, C.green]].sort((a, b) => b[1] - a[1]), [brl(c.tot / 1000, 1) + ' mil', 'perda do mês'])}</div>
+    ${ler('cada barra é um gerente. Preto = venceu, verde = estragou' + (c.aju > 0 ? ', laranja = ajuste de estoque (padaria e flores)' : '') + '. O número dentro mostra a divisão entre eles.')}</div>
+    <div class="col" style="flex:1"><h2>Venceu ou estragou?</h2><div class="center">${donut([['Vencido', c.ven, C.black], ['Avariado', c.ava, C.green], ['Ajuste', c.aju || 0, C.orange]].filter(p => p[1] > 0).sort((a, b) => b[1] - a[1]), [brl(c.tot / 1000, 1) + ' mil', 'perda do mês'])}</div>
     <div class="leg2"><span class="sem" style="background:${C.black}"></span><b>Vencido</b> ${pct(c.ven / c.tot, 0)} · ${brl(c.ven, 0)}<br>
-    <span class="sem" style="background:${C.green}"></span><b>Avariado</b> ${pct(c.ava / c.tot, 0)} · ${brl(c.ava, 0)}</div></div></div>`;
+    <span class="sem" style="background:${C.green}"></span><b>Avariado</b> ${pct(c.ava / c.tot, 0)} · ${brl(c.ava, 0)}${c.aju > 0 ? `<br><span class="sem" style="background:${C.orange}"></span><b>Ajuste de estoque</b> ${pct(c.aju / c.tot, 0)} · ${brl(c.aju, 0)}` : ''}</div></div></div>`;
   return h;
 }
 
@@ -83,11 +84,11 @@ export const secRanking = c => '<h2>Ranking dos setores — os 12 que mais perde
   ler('cada barra é um setor, do que mais perdeu para o que menos perdeu. <b>Preto</b> = venceu, <b>verde</b> = estragou; a porcentagem dentro da barra mostra quanto é cada parte. No fim da barra: o valor perdido e quanto ele é de toda a perda da loja. Embaixo do nome: a quantidade perdida.');
 
 export function secTabela(c) {
-  let h = '<h2>Tabela completa dos setores</h2><table><tr><th>Setor</th><th>Encarregado · Gerente</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total</th><th class="n">% da loja</th><th class="n">Quantidade</th></tr>';
+  let h = '<h2>Tabela completa dos setores</h2><table><tr><th>Setor</th><th>Encarregado · Gerente</th><th class="n">Vencido</th><th class="n">Avariado</th>' + (c.aju > 0 ? '<th class="n">Ajuste de estoque</th>' : '') + '<th class="n">Total</th><th class="n">% da loja</th><th class="n">Quantidade</th></tr>';
   for (const [k, a] of c.bymix) { const i = mixInfo(k);
-    h += `<tr><td><b>${esc(k)}</b></td><td>${esc(i.enc)} · ${esc(i.ger)}</td><td class="n">${vp(a.ven, a.tot)}</td><td class="n">${vp(a.ava, a.tot)}</td><td class="n"><b>${brl(a.tot)}</b></td><td class="n"><b>${pct(a.tot / c.tot)}</b></td><td class="n">${qfmt(a.un, a.kg)}</td></tr>`; }
-  return h + `<tr class="tot"><td>TOTAL DA LOJA</td><td></td><td class="n">${brl(c.ven)}</td><td class="n">${brl(c.ava)}</td><td class="n">${brl(c.tot)}</td><td class="n">100%</td><td class="n">${qfmt(c.un, c.kg)}</td></tr></table>
-    ${ler('cada linha é um setor, do que mais perdeu para o que menos perdeu. Em <b>Vencido</b> e <b>Avariado</b>, o número pequeno embaixo do valor é quanto daquele setor foi de cada tipo. <b>% da loja</b> = quanto o setor representa de toda a perda. <b>Quantidade</b> = unidades e quilos perdidos.')}`;
+    h += `<tr><td><b>${esc(k)}</b></td><td>${esc(i.enc)} · ${esc(i.ger)}</td><td class="n">${vp(a.ven, a.tot)}</td><td class="n">${vp(a.ava, a.tot)}</td>${c.aju > 0 ? `<td class="n">${vp(a.aju, a.tot)}</td>` : ''}<td class="n"><b>${brl(a.tot)}</b></td><td class="n"><b>${pct(a.tot / c.tot)}</b></td><td class="n">${qfmt(a.un, a.kg)}</td></tr>`; }
+  return h + `<tr class="tot"><td>TOTAL DA LOJA</td><td></td><td class="n">${brl(c.ven)}</td><td class="n">${brl(c.ava)}</td>${c.aju > 0 ? `<td class="n">${brl(c.aju)}</td>` : ''}<td class="n">${brl(c.tot)}</td><td class="n">100%</td><td class="n">${qfmt(c.un, c.kg)}</td></tr></table>
+    ${ler('cada linha é um setor, do que mais perdeu para o que menos perdeu. Em <b>Vencido</b>, <b>Avariado</b>' + (c.aju > 0 ? ' e <b>Ajuste de estoque</b> (sobras e perdas da padaria e das flores)' : '') + ', o número pequeno embaixo do valor é quanto daquele setor foi de cada tipo. <b>% da loja</b> = quanto o setor representa de toda a perda. <b>Quantidade</b> = unidades e quilos perdidos.')}`;
 }
 
 export const secDemais = c => '<h2>Os demais setores lado a lado (sem Açougue, Frios e Pães)</h2>' +
@@ -111,16 +112,17 @@ export function secSeg(c, mix, withKpis = true) {
 }
 
 export function tblItems(items, o = {}) {
-  let h = `<table><tr><th>#</th><th>Produto</th>${o.mix !== false ? '<th>Setor</th>' : ''}<th class="n">Quanto perdeu</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total</th>${o.total ? '<th class="n">% do total</th>' : ''}<th class="n">Vezes</th></tr>`;
+  const aj = items.some(a => a.aju > 0);
+  let h = `<table><tr><th>#</th><th>Produto</th>${o.mix !== false ? '<th>Setor</th>' : ''}<th class="n">Quanto perdeu</th><th class="n">Vencido</th><th class="n">Avariado</th>${aj ? '<th class="n">Ajuste</th>' : ''}<th class="n">Total</th>${o.total ? '<th class="n">% do total</th>' : ''}<th class="n">Vezes</th></tr>`;
   items.forEach((a, i) => { h += `<tr><td>${(o.start || 1) + i}</td><td>${esc(a.desc)}</td>${o.mix !== false ? `<td>${esc(a.mix)}</td>` : ''}<td class="n">${num(a.q, a.unit === 'kg' ? 1 : 0)} ${u(a.unit)}</td>
-    <td class="n">${a.ven ? brl(a.ven) : '-'}</td><td class="n">${a.ava ? brl(a.ava) : '-'}</td><td class="n"><b>${brl(a.tot)}</b></td>${o.total ? `<td class="n">${pct(a.tot / o.total)}</td>` : ''}<td class="n">${a.n}</td></tr>`; });
+    <td class="n">${a.ven ? brl(a.ven) : '-'}</td><td class="n">${a.ava ? brl(a.ava) : '-'}</td>${aj ? `<td class="n">${a.aju ? brl(a.aju) : '-'}</td>` : ''}<td class="n"><b>${brl(a.tot)}</b></td>${o.total ? `<td class="n">${pct(a.tot / o.total)}</td>` : ''}<td class="n">${a.n}</td></tr>`; });
   return h + '</table>';
 }
 
 export function tblTipo(cons, key, unit, n = 12) {
   const lst = cons.filter(a => a[key] > 0 && a.unit === unit).sort((a, b) => b[key] - a[key]).slice(0, n);
   let h = '<table><tr><th>#</th><th>Produto</th><th>Setor</th><th class="n">Quanto perdeu</th><th class="n">Valor</th></tr>';
-  lst.forEach((a, i) => { const q = key === 'ven' ? a.qv : a.qa; h += `<tr><td>${i + 1}</td><td>${esc(a.desc)}</td><td>${esc(a.mix)}</td><td class="n">${num(q, unit === 'kg' ? 1 : 0)} ${u(unit)}</td><td class="n"><b>${brl(a[key])}</b></td></tr>`; });
+  lst.forEach((a, i) => { const q = key === 'ven' ? a.qv : key === 'aju' ? a.qj : a.qa; h += `<tr><td>${i + 1}</td><td>${esc(a.desc)}</td><td>${esc(a.mix)}</td><td class="n">${num(q, unit === 'kg' ? 1 : 0)} ${u(unit)}</td><td class="n"><b>${brl(a[key])}</b></td></tr>`; });
   if (!lst.length) h += '<tr><td colspan="5" class="small">Nenhum produto neste grupo no mês.</td></tr>';
   return h + '</table>';
 }
@@ -136,7 +138,7 @@ export function secTop(c) {
 export const lerUnit = unit => ler(unit === 'kg'
   ? 'aqui estão só os produtos <b>de quilo</b> (pesados na balança, como carnes, frios fatiados e queijos). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em quilos; <b>Valor</b> é o custo em reais.'
   : 'aqui estão só os produtos <b>de unidade</b> (contados um a um, como iogurtes, bebidas e pacotes). A primeira tabela mostra os que mais <b>venceram</b>; a segunda, os que mais <b>estragaram</b>. <b>Quanto perdeu</b> está em unidades; <b>Valor</b> é o custo em reais.');
-export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u> (passaram da validade)</h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}${lerUnit(unit)}`;
+export const secUnit = (c, unit) => `<h2>Os que mais <u>venceram</u> (passaram da validade)</h2>${tblTipo(c.cons, 'ven', unit)}<h2>Os que mais <u>estragaram</u> (avariados)</h2>${tblTipo(c.cons, 'ava', unit)}${c.cons.some(a => a.aju > 0 && a.unit === unit) ? `<h2>Ajustes de estoque (sobras e perdas da padaria e das flores)</h2>${tblTipo(c.cons, 'aju', unit)}` : ''}${lerUnit(unit)}`;
 
 export function secRepetidos(c) {
   const both = c.cons.filter(a => a.ven > 0 && a.ava > 0).slice(0, 15);
@@ -148,14 +150,14 @@ export function secRepetidos(c) {
 }
 
 export function secEvolucao(c) {
-  const dias = {}; c.rows.forEach(x => { const d = dias[x.data] ||= { ven: 0, ava: 0 }; d[x.tipo === 'VENCIDO' ? 'ven' : 'ava'] += x.valor; });
+  const dias = {}; c.rows.forEach(x => { const d = dias[x.data] ||= { ven: 0, ava: 0, aju: 0 }; d[x.tipo === 'VENCIDO' ? 'ven' : x.tipo === 'AJUSTE' ? 'aju' : 'ava'] += x.valor; });
   const ks = Object.keys(dias).sort();
   if (ks.length < 2) return '';
   const ser = ks.map(k => ({ label: k.slice(8, 10) + '/' + k.slice(5, 7), ...dias[k] }));
-  const dow = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], sem = dow.map(l => ({ label: l, ven: 0, ava: 0 }));
-  ks.forEach(k => { const d = new Date(k + 'T12:00:00').getDay(); sem[d].ven += dias[k].ven; sem[d].ava += dias[k].ava; });
+  const dow = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], sem = dow.map(l => ({ label: l, ven: 0, ava: 0, aju: 0 }));
+  ks.forEach(k => { const d = new Date(k + 'T12:00:00').getDay(); sem[d].ven += dias[k].ven; sem[d].ava += dias[k].ava; sem[d].aju += dias[k].aju; });
   return '<h2>Perda dia a dia</h2>' + columns(ser, { fmt: v => num(v / 1000, 1) + 'k' }) + ler('cada coluna é um dia em que o relatório foi enviado, <b>na ordem do calendário</b> (para ver a evolução). Preto = venceu, verde = estragou. O número em cima é o total do dia, em milhares de reais (k = mil).') +
-    '<h2>Por dia da semana — do que mais perdeu para o que menos perdeu</h2>' + columns(sem.filter(d => d.ven + d.ava > 0).sort((a, b) => (b.ven + b.ava) - (a.ven + a.ava)), { height: 190 }) + ler('soma da perda de cada dia da semana no mês, do dia que mais perdeu para o que menos perdeu. Ajuda a ver em que dias a perda costuma ser maior.');
+    '<h2>Por dia da semana — do que mais perdeu para o que menos perdeu</h2>' + columns(sem.filter(d => d.ven + d.ava + d.aju > 0).sort((a, b) => (b.ven + b.ava + b.aju) - (a.ven + a.ava + a.aju)), { height: 190 }) + ler('soma da perda de cada dia da semana no mês, do dia que mais perdeu para o que menos perdeu. Ajuda a ver em que dias a perda costuma ser maior.');
 }
 
 export function secVenda(c) {
@@ -303,9 +305,9 @@ const META = () => MEDIA_LOJA * QUEBRA / 100;
 
 export function secAnoResumo(c) {
   const A = c.A, ks = c.ks, tot = c.tot, med = tot / ks.length;
-  const tm = ks.map(k => ({ k, t: A.meses[k].ven + A.meses[k].ava, v: A.meses[k].venda }));
+  const tm = ks.map(k => ({ k, t: (A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)), v: A.meses[k].venda }));
   const pior = [...tm].sort((a, b) => b.t - a.t)[0], melhor = [...tm].sort((a, b) => a.t - b.t)[0];
-  const vt = c.comV.reduce((s, k) => s + A.meses[k].venda, 0), pv = c.comV.reduce((s, k) => s + A.meses[k].ven + A.meses[k].ava, 0);
+  const vt = c.comV.reduce((s, k) => s + A.meses[k].venda, 0), pv = c.comV.reduce((s, k) => s + (A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)), 0);
   const lt = c.comV.reduce((s, k) => s + (A.meses[k].lucro || 0), 0);
   let h = '<div class="kpis">' + kpi('Perda no ano', brl(tot, 0), `${ks.length} meses · ${num(c.rows.length)} registros`, 'red') +
     kpi('Média por mês', brl(med, 0), 'perda média de cada mês', 'dark') +
@@ -320,22 +322,22 @@ export function secAnoResumo(c) {
     <li><b>${esc(c.bymix[0][0])}</b> e <b>${esc(c.bymix[1][0])}</b> foram os setores que mais perderam no ano: juntos, <b>${pct((c.bymix[0][1].tot + c.bymix[1][1].tot) / tot, 0)}</b> de toda a perda.</li>
     <li>O produto que mais deu perda no ano foi <b>${esc(c.cons[0].desc)}</b>: ${brl(c.cons[0].tot)}.</li>
     <li>${num(c.cons.length)} produtos diferentes tiveram perda no ano.</li></ul></div>`;
-  h += '<h2>Ranking dos meses — do que mais perdeu para o que menos perdeu</h2>' + hbar(ks.map(k => [MESES[+k.slice(5)], { ven: A.meses[k].ven, ava: A.meses[k].ava, tot: A.meses[k].ven + A.meses[k].ava, un: 0, kg: 0 }]).sort((a, b) => b[1].tot - a[1].tot), tot, { labelWidth: 110, qty: false, endfmt: t => `${brl(t, 0)} · ${pct(t / tot)} do ano` }) +
+  h += '<h2>Ranking dos meses — do que mais perdeu para o que menos perdeu</h2>' + hbar(ks.map(k => [MESES[+k.slice(5)], { ven: A.meses[k].ven, ava: A.meses[k].ava, aju: A.meses[k].aju || 0, tot: (A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)), un: 0, kg: 0 }]).sort((a, b) => b[1].tot - a[1].tot), tot, { labelWidth: 110, qty: false, endfmt: t => `${brl(t, 0)} · ${pct(t / tot)} do ano` }) +
     ler('cada barra é um mês, do mês que mais perdeu para o que menos perdeu. A parte <b>preta</b> é o que venceu e a <b>verde</b> é o que estragou; no fim da barra, o valor do mês e quanto ele é do ano.');
   return h;
 }
 
 export function secAnoMeses(c) {
   const A = c.A, ks = c.ks, meta = META();
-  let h = '<h2>Evolução no calendário</h2>' + columns(ks.map(k => ({ label: mesCurto(k), ven: A.meses[k].ven, ava: A.meses[k].ava })), { height: 170 }) +
+  let h = '<h2>Evolução no calendário</h2>' + columns(ks.map(k => ({ label: mesCurto(k), ven: A.meses[k].ven, ava: A.meses[k].ava, aju: A.meses[k].aju || 0 })), { height: 170 }) +
     ler('aqui os meses ficam <b>na ordem do calendário</b>, para ver se a perda está subindo ou caindo. Preto = venceu, verde = estragou; em cima, o total do mês em mil reais.');
-  h += '<h2>Tabela mês a mês (ordem do calendário)</h2><table><tr><th>Mês</th><th class="n">Vencido</th><th class="n">Avariado</th><th class="n">Total</th><th class="n">Venda</th><th class="n">De cada R$ 100<br>vendidos, perdemos</th><th>Sinal</th><th class="n">Comparado ao<br>mês anterior</th></tr>';
+  h += '<h2>Tabela mês a mês (ordem do calendário)</h2><table><tr><th>Mês</th><th class="n">Vencido</th><th class="n">Avariado e<br>ajuste de estoque</th><th class="n">Total</th><th class="n">Venda</th><th class="n">De cada R$ 100<br>vendidos, perdemos</th><th>Sinal</th><th class="n">Comparado ao<br>mês anterior</th></tr>';
   let tv = 0, ta = 0, vv = 0, pv = 0;
   ks.forEach((k, i) => {
-    const m = A.meses[k], t = m.ven + m.ava, prev = i ? A.meses[ks[i - 1]].ven + A.meses[ks[i - 1]].ava : 0, idx = m.venda ? t / m.venda : null;
-    tv += m.ven; ta += m.ava; if (m.venda) { vv += m.venda; pv += t; }
+    const m = A.meses[k], t = m.ven + m.ava + (m.aju || 0), prev = i ? (A.meses[ks[i - 1]].ven + A.meses[ks[i - 1]].ava + (A.meses[ks[i - 1]].aju || 0)) : 0, idx = m.venda ? t / m.venda : null;
+    tv += m.ven; ta += m.ava + (m.aju || 0); if (m.venda) { vv += m.venda; pv += t; }
     const st = idx == null ? ['#BFBFBF', 'Sem venda'] : idx <= meta ? ['#3BB072', 'Dentro da meta'] : idx <= meta * 1.2 ? ['#F2B705', 'Atenção'] : ['#D64545', 'Acima da meta'];
-    h += `<tr><td><b>${MESES[+k.slice(5)]}</b></td><td class="n">${brl(m.ven)}</td><td class="n">${brl(m.ava)}</td><td class="n"><b>${brl(t)}</b></td><td class="n">${m.venda ? brl(m.venda, 0) : '-'}</td><td class="n"><b>${idx != null ? 'R$ ' + num(idx * 100, 2) : '-'}</b></td><td><span class="sem" style="background:${st[0]}"></span>${st[1]}</td><td class="n">${prev ? (t > prev ? '<span style="color:#D64545">▲ subiu ' : '<span style="color:#1E7B46">▼ caiu ') + pct(Math.abs(t / prev - 1), 0) + '</span>' : '-'}</td></tr>`;
+    h += `<tr><td><b>${MESES[+k.slice(5)]}</b></td><td class="n">${brl(m.ven)}</td><td class="n">${brl(m.ava + (m.aju || 0))}</td><td class="n"><b>${brl(t)}</b></td><td class="n">${m.venda ? brl(m.venda, 0) : '-'}</td><td class="n"><b>${idx != null ? 'R$ ' + num(idx * 100, 2) : '-'}</b></td><td><span class="sem" style="background:${st[0]}"></span>${st[1]}</td><td class="n">${prev ? (t > prev ? '<span style="color:#D64545">▲ subiu ' : '<span style="color:#1E7B46">▼ caiu ') + pct(Math.abs(t / prev - 1), 0) + '</span>' : '-'}</td></tr>`;
   });
   const n = ks.length;
   h += `<tr class="tot"><td>TOTAL DO ANO</td><td class="n">${brl(tv)}</td><td class="n">${brl(ta)}</td><td class="n">${brl(tv + ta)}</td><td class="n">${vv ? brl(vv, 0) : '-'}</td><td class="n">${vv ? 'R$ ' + num(pv / vv * 100, 2) : '-'}</td><td></td><td></td></tr>
@@ -350,7 +352,7 @@ export function secAnoSetorMes(c) {
   let h = `<h2>Setores mês a mês (em mil reais)</h2><table style="font-size:7.8px"><tr><th>Setor</th>${ks.map(k => `<th class="n">${mesCurto(k)}</th>`).join('')}<th class="n">Total</th><th class="n">Média<br>/mês</th></tr>`;
   for (const k of top) { const r = m[k] || {}, t = ks.reduce((s, x) => s + (r[x] || 0), 0), mx = Math.max(...ks.map(x => r[x] || 0));
     h += `<tr><td><b>${esc(k)}</b></td>${ks.map(x => `<td class="n"${r[x] && r[x] === mx ? ' style="background:#FDECEC;font-weight:700"' : ''}>${f(r[x])}</td>`).join('')}<td class="n"><b>${f(t)}</b></td><td class="n">${f(t / ks.length)}</td></tr>`; }
-  h += `<tr class="tot"><td>LOJA</td>${ks.map(k => `<td class="n">${f(A.meses[k].ven + A.meses[k].ava)}</td>`).join('')}<td class="n">${f(c.tot)}</td><td class="n">${f(c.tot / ks.length)}</td></tr></table>`;
+  h += `<tr class="tot"><td>LOJA</td>${ks.map(k => `<td class="n">${f((A.meses[k].ven + A.meses[k].ava + (A.meses[k].aju || 0)))}</td>`).join('')}<td class="n">${f(c.tot)}</td><td class="n">${f(c.tot / ks.length)}</td></tr></table>`;
   return h + ler('cada linha é um setor e cada coluna um mês. Os valores estão em <b>mil reais</b> (ex.: 12,5 = R$ 12.500). A célula <b>vermelha</b> marca o pior mês de cada setor. <b>Média/mês</b> = total do setor no ano dividido pelos meses com dados.');
 }
 

@@ -61,3 +61,27 @@ export async function parseVendas(file) {
   }
   return { periodo: `${per[1]}/${per[2]}/${per[3]} a ${per[4]}/${per[5]}/${per[6]}`, mes: `${per[6]}-${per[5]}`, deptos };
 }
+
+// "RELATÓRIO DE AJUSTE DE ESTOQUE" (Padaria: perda, sobra de mesa, sobra de vitrine · Flores: perda) — enviado no fim do mês
+const AJ_SETOR = { 'FLORES': 'Garden', 'PADARIA': 'Padaria' };
+const AJ_MOTIVO = m => ({ 'PERDA': 'Perda', 'SOBRA MESA': 'Sobra de mesa', 'SOBRA VITRINE': 'Sobra de vitrine' })[m] || (m.charAt(0) + m.slice(1).toLowerCase());
+const br3 = v => Math.abs(parseFloat(v.replace(/\./g, '').replace(',', '.')));
+export async function parseAjuste(file) {
+  const lines = await pdfLines(file);
+  const txt = lines.join('\n');
+  if (!/AJUSTE DE ESTOQUE/i.test(txt)) throw new Error('Este PDF não parece ser o "Relatório de Ajuste de Estoque".');
+  const per = txt.match(/de\s+(\d{2})\/(\d{2})\/(\d{4})\s+até\s+(\d{2})\/(\d{2})\/(\d{4})/i);
+  const loja = (txt.match(/Loja:\s*(\d+)/) || [])[1] || '';
+  const tg = txt.match(/TOTAL GERAL:\s*(-?[\d.]+)\s+(-?[\d.]*\d,\d{3})/);
+  const items = []; let setor = '', motivo = '', setorNome = '';
+  for (const l of lines) {
+    const h = l.match(/Setor:\s*\d+-(.+?)\s+Motivo:\s*\d+-(.+)$/);
+    if (h) { setorNome = h[1].trim(); setor = AJ_SETOR[setorNome.toUpperCase()] || ''; motivo = AJ_MOTIVO(h[2].trim().toUpperCase()); continue; }
+    const m = l.match(/^(\d+-\d)\s+(?:(\d{8,14})\s+)?(.+?)\s+(-?[\d.]+)\s+(-?[\d.]*\d,\d{3})\s+(-?[\d.]*\d,\d{3})\s+(\d{2})\/(\d{2})\/(\d{4})\s+\d{1,3}$/);
+    if (m) items.push({ plu: m[1], desc: m[3].replace(/\s+/g, ' ').trim(), qtd: Math.abs(parseFloat(m[4])), custo: br3(m[5]), valor: br3(m[6]),
+      dia: `${m[9]}-${m[8]}-${m[7]}`, motivo, setorRel: setorNome, ...(setor ? { mix: setor } : {}) });
+  }
+  const total = Math.round(items.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+  return { items, total, totalRelatorio: tg ? br3(tg[2]) : null, loja, mes: per ? `${per[6]}-${per[5]}` : '', inicio: per ? `${per[3]}-${per[2]}-${per[1]}` : '', fim: per ? `${per[6]}-${per[5]}-${per[4]}` : '',
+    setores: [...new Set(items.map(x => x.setorRel))], motivos: [...new Set(items.map(x => x.motivo))] };
+}

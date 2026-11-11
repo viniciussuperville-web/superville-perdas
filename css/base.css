@@ -7,9 +7,9 @@
 body{font-family:'Montserrat',Arial,sans-serif;color:#262626;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 h2{font-size:14px;font-weight:800;margin:18px 0 8px;color:#111;display:flex;align-items:center;gap:8px}
 h2:before{content:'';width:5px;height:16px;background:var(--green);border-radius:2px;flex:none}
-.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .kpi{background:#F4F6F5;border-radius:10px;padding:11px 12px;border-top:3px solid var(--green)}
-.kpi.dark{border-top-color:var(--black)} .kpi.red{border-top-color:var(--red)}
+.kpi.dark{border-top-color:var(--black)} .kpi.red{border-top-color:var(--red)} .kpi.orange{border-top-color:#E07B39}
 .kpi .l{font-size:9.5px;font-weight:700;color:#595959;text-transform:uppercase;letter-spacing:.3px}
 .kpi .v{font-size:19px;font-weight:800;margin-top:3px;color:#111} .kpi .s{font-size:10px;color:#595959;margin-top:2px}
 .row{display:flex;gap:16px} .col{flex:1;min-width:0} .center{text-align:center}
