@@ -14,7 +14,7 @@ const app = $('#app');
 
 
 // ---------------- atualização automática do site ----------------
-export const APP_V = '28';
+export const APP_V = '29';
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -119,12 +119,11 @@ function filtroBar() {
       return `<button data-fm="${k}" class="${k === state.mes ? 'on' : ''}" ${fut ? 'disabled' : ''}>${MCURTO[i + 1]}/${y.slice(2)}</button>`; }).join('')}</div>
     <div class="flex"><label class="field" style="min-width:240px">Setor<select id="fsetor"><option value="">Todos os setores</option>${setores.map(k => `<option ${k === state.setor ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
     <span class="badge ${fech ? 'ok' : ''}">${fech ? '✔ Mês fechado (bate com o sistema)' : state.rows.length ? 'Mês em andamento' : 'Sem dados'}</span>
-    <div style="flex:1"></div><button class="btn out" id="focult">${OCULTO ? '👁 Mostrar valores' : '🙈 Ocultar valores'}</button></div></div>`;
+    </div></div>`;
 }
 function bindFiltro() {
   document.querySelectorAll('[data-fm]').forEach(b => b.onclick = async () => { state.mes = b.dataset.fm; state.setor = ''; syncURL(); renderShellTabs(); await loadMes(); });
   const fs = $('#fsetor'); if (fs) fs.onchange = () => { state.setor = fs.value; syncURL(); render(); };
-  const fo = $('#focult'); if (fo) fo.onclick = () => { setOculto(!OCULTO); render(); };
 }
 function pizza(itens, tot, titulo) {
   const top = itens.slice(0, 9), resto = itens.slice(9).reduce((s, [, a]) => s + a.tot, 0);

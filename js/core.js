@@ -4,7 +4,7 @@ import { SEGMAP, AC_SEGS, FR_SEGS, MIX2DEP, REF, QUEBRA } from './config.js';
 export const num = (v, d = 0) => (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 // ocultar valores em R$ (fica só porcentagem/quantidade)
 export let OCULTO = false;
-try { OCULTO = localStorage.getItem('sv-perdas-oculto') === '1'; } catch (e) {}
+try { localStorage.removeItem('sv-perdas-oculto'); } catch (e) {}
 export function setOculto(v) { OCULTO = v; try { localStorage.setItem('sv-perdas-oculto', v ? '1' : '0'); } catch (e) {} }
 export const brl = (v, d = 2) => OCULTO ? 'R$ •••' : 'R$ ' + num(v, d);
 export const TIPO_NOME = { VENCIDO: 'Vencido', AVARIADO: 'Avariado', AJUSTE: 'Ajuste de estoque' };
